@@ -12,6 +12,7 @@ import { CarbonCreditEntity } from './infrastructure/database/entities/carbon-cr
 import { CarbonCreditTransactionEntity } from './infrastructure/database/entities/carbon-credit-transaction.entity';
 import { RewardEntity } from './infrastructure/database/entities/reward.entity';
 import { UserRewardEntity } from './infrastructure/database/entities/user-reward.entity';
+import { UserEntity } from './infrastructure/database/entities/user.entity';
 import { EcoLocationEntity } from './infrastructure/database/entities/eco-location.entity';
 import { LocationReviewEntity } from './infrastructure/database/entities/location-review.entity';
 
@@ -19,11 +20,13 @@ import { LocationReviewEntity } from './infrastructure/database/entities/locatio
 // Repository implementations
 import { TypeOrmCarbonCreditRepository } from './infrastructure/database/repositories/typeorm-carbon-credit.repository';
 import { TypeOrmRewardRepository, TypeOrmUserRewardRepository } from './infrastructure/database/repositories/typeorm-reward.repository';
+import { TypeOrmUserRepository } from './infrastructure/database/repositories/typeorm-user.repository';
 import { TypeOrmLocationReviewRepository } from './infrastructure/database/repositories/typeorm-location-review.repository';
 import { TypeOrmLocationRepository } from './infrastructure/database/repositories/typeorm-location.repository';
 import { TypeOrmRankingRepository } from './infrastructure/database/repositories/typeorm-ranking.repository';
 import { CARBON_CREDIT_REPOSITORY } from './domain/carbon-credit/repositories/carbon-credit.repository.interface';
 import { REWARD_REPOSITORY, USER_REWARD_REPOSITORY } from './domain/reward/repositories/reward.repository.interface';
+import { USER_REPOSITORY } from './domain/user/repositories/user.repository.interface';
 import { LOCATION_REPOSITORY, LOCATION_REVIEW_REPOSITORY } from './domain/location/repositories/location.repository.interface';
 import { RANKING_REPOSITORY } from './domain/ranking/repositories/ranking.repository.interface';
 
@@ -83,6 +86,7 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
 
     // TypeORM entities for controllers outside modules
     TypeOrmModule.forFeature([
+      UserEntity,
       CarbonCreditEntity,
       CarbonCreditTransactionEntity,
       RewardEntity,
@@ -135,6 +139,10 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
   ],
   providers: [
     // Repository implementations
+    {
+      provide: USER_REPOSITORY,
+      useClass: TypeOrmUserRepository,
+    },
     {
       provide: CARBON_CREDIT_REPOSITORY,
       useClass: TypeOrmCarbonCreditRepository,
