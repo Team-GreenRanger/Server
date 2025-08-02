@@ -42,15 +42,46 @@ export class CreateRewardDto {
   @Min(1)
   cost: number;
 
+  @ApiProperty({ description: 'Barcode image URL' })
+  @IsString()
+  barcodeImageUrl: string;
+
+  @ApiPropertyOptional({ description: 'Original price in currency' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  originalPrice?: number;
+
   @ApiPropertyOptional({ description: 'Reward image URL' })
   @IsOptional()
   @IsString()
   imageUrl?: string;
 
-  @ApiProperty({ description: 'Available quantity', minimum: 1 })
+  @ApiPropertyOptional({ description: 'Partner company name' })
+  @IsOptional()
+  @IsString()
+  partnerName?: string;
+
+  @ApiPropertyOptional({ description: 'Partner logo URL' })
+  @IsOptional()
+  @IsString()
+  partnerLogoUrl?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Terms and conditions' })
+  @IsOptional()
+  termsAndConditions?: string[];
+
+  @ApiPropertyOptional({ description: 'Validity period in days', minimum: 1 })
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  availableQuantity: number;
+  validityDays?: number;
+
+  @ApiPropertyOptional({ description: 'Total available quantity' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  totalQuantity?: number;
 
   @ApiPropertyOptional({ description: 'Expiry date' })
   @IsOptional()
@@ -79,11 +110,11 @@ export class UpdateRewardDto {
   @IsString()
   imageUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Available quantity', minimum: 0 })
+  @ApiPropertyOptional({ description: 'Total available quantity', minimum: 0 })
   @IsOptional()
   @IsNumber()
   @Min(0)
-  availableQuantity?: number;
+  totalQuantity?: number;
 
   @ApiPropertyOptional({ enum: RewardStatusDto, description: 'Reward status' })
   @IsOptional()

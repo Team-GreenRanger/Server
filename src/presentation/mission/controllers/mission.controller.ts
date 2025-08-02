@@ -21,6 +21,10 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AssignMissionUseCase } from '../../../application/mission/use-cases/assign-mission.use-case';
 import { SubmitMissionUseCase } from '../../../application/mission/use-cases/submit-mission.use-case';
 import { VerifyMissionUseCase } from '../../../application/mission/use-cases/verify-mission.use-case';
+import { GetMissionsUseCase } from '../../../application/mission/use-cases/get-missions.use-case';
+import { GetMissionByIdUseCase } from '../../../application/mission/use-cases/get-mission-by-id.use-case';
+import { GetUserMissionsUseCase } from '../../../application/mission/use-cases/get-user-missions.use-case';
+import { GetDailyMissionsUseCase } from '../../../application/mission/use-cases/get-daily-missions.use-case';
 import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 import { NotificationService } from '../../../application/notification/services/notification.service';
 import { 
@@ -42,6 +46,10 @@ export class MissionController {
     private readonly assignMissionUseCase: AssignMissionUseCase,
     private readonly submitMissionUseCase: SubmitMissionUseCase,
     private readonly verifyMissionUseCase: VerifyMissionUseCase,
+    private readonly getMissionsUseCase: GetMissionsUseCase,
+    private readonly getMissionByIdUseCase: GetMissionByIdUseCase,
+    private readonly getUserMissionsUseCase: GetUserMissionsUseCase,
+    private readonly getDailyMissionsUseCase: GetDailyMissionsUseCase,
     private readonly claudeService: ClaudeService,
     private readonly notificationService: NotificationService,
   ) {}
@@ -59,8 +67,25 @@ export class MissionController {
     @Query('status') status?: MissionStatusDto,
     @Query('type') type?: string,
   ): Promise<MissionResponseDto[]> {
-    // TODO: Implement get missions use case
-    return [];
+    const result = await this.getMissionsUseCase.execute({
+      status: status as any,
+      type,
+    });
+
+    return result.missions.map(mission => ({
+      id: mission.id,
+      title: mission.title,
+      description: mission.description,
+      type: mission.type as any,
+      difficulty: mission.difficulty as any,
+      co2ReductionAmount: mission.co2ReductionAmount,
+      creditReward: mission.creditReward,
+      imageUrl: mission.imageUrl,
+      instructions: mission.instructions,
+      verificationCriteria: mission.verificationCriteria,
+      status: mission.status as any,
+      createdAt: mission.createdAt,
+    }));
   }
 
   @Get(':id')
@@ -72,8 +97,23 @@ export class MissionController {
     type: MissionResponseDto 
   })
   async getMissionById(@Param('id') id: string): Promise<MissionResponseDto> {
-    // TODO: Implement get mission by ID use case
-    throw new Error('Not implemented');
+    const result = await this.getMissionByIdUseCase.execute({ id });
+    const mission = result.mission;
+
+    return {
+      id: mission.id,
+      title: mission.title,
+      description: mission.description,
+      type: mission.type as any,
+      difficulty: mission.difficulty as any,
+      co2ReductionAmount: mission.co2ReductionAmount,
+      creditReward: mission.creditReward,
+      imageUrl: mission.imageUrl,
+      instructions: mission.instructions,
+      verificationCriteria: mission.verificationCriteria,
+      status: mission.status as any,
+      createdAt: mission.createdAt,
+    };
   }
 
   @Post('assign')
@@ -112,6 +152,35 @@ export class MissionController {
     };
   }
 
+  @Get('user/daily-missions')
+  @ApiOperation({ summary: 'Get daily missions for current user (assigns if not exists)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Daily missions for user', 
+    type: [UserMissionResponseDto] 
+  })
+  async getDailyMissions(@Request() req: any): Promise<UserMissionResponseDto[]> {
+    const userId = req.user.sub;
+    
+    const result = await this.getDailyMissionsUseCase.execute({ userId });
+
+    return result.userMissions.map(userMission => ({
+      id: userMission.id,
+      userId: userMission.userId,
+      missionId: userMission.missionId,
+      status: userMission.status as any,
+      currentProgress: userMission.currentProgress,
+      targetProgress: userMission.targetProgress,
+      submissionImageUrls: userMission.submissionImageUrls,
+      submissionNote: userMission.submissionNote,
+      verificationNote: userMission.verificationNote,
+      submittedAt: userMission.submittedAt,
+      verifiedAt: userMission.verifiedAt,
+      completedAt: userMission.completedAt,
+      assignedAt: userMission.assignedAt,
+    }));
+  }
+
   @Get('user/missions')
   @ApiOperation({ summary: 'Get current user missions' })
   @ApiResponse({ 
@@ -124,8 +193,28 @@ export class MissionController {
     @Request() req: any,
     @Query('status') status?: UserMissionStatusDto,
   ): Promise<UserMissionResponseDto[]> {
-    // TODO: Implement get user missions use case
-    return [];
+    const userId = req.user.sub;
+    
+    const result = await this.getUserMissionsUseCase.execute({
+      userId,
+      status: status as any,
+    });
+
+    return result.userMissions.map(userMission => ({
+      id: userMission.id,
+      userId: userMission.userId,
+      missionId: userMission.missionId,
+      status: userMission.status as any,
+      currentProgress: userMission.currentProgress,
+      targetProgress: userMission.targetProgress,
+      submissionImageUrls: userMission.submissionImageUrls,
+      submissionNote: userMission.submissionNote,
+      verificationNote: userMission.verificationNote,
+      submittedAt: userMission.submittedAt,
+      verifiedAt: userMission.verifiedAt,
+      completedAt: userMission.completedAt,
+      assignedAt: userMission.assignedAt,
+    }));
   }
 
   @Patch('user-missions/:id/submit')
@@ -167,10 +256,15 @@ export class MissionController {
 
       // Send notification based on result
       if (verificationResult.isValid) {
+        // Get mission details for notification
+        const missionResult = await this.getMissionByIdUseCase.execute({ 
+          id: userMission.missionId 
+        });
+        
         await this.notificationService.createMissionCompletedNotification(
           userId,
-          'Mission Title', // TODO: Get actual mission title
-          500 // TODO: Get actual credit reward
+          missionResult.mission.title,
+          missionResult.mission.creditReward
         );
       }
 

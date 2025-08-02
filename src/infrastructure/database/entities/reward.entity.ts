@@ -7,19 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { UserRewardEntity } from './user-reward.entity';
-
-export enum RewardTypeEntity {
-  DISCOUNT_COUPON = 'DISCOUNT_COUPON',
-  GIFT_CARD = 'GIFT_CARD',
-  PHYSICAL_ITEM = 'PHYSICAL_ITEM',
-  EXPERIENCE = 'EXPERIENCE',
-}
-
-export enum RewardStatusEntity {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  OUT_OF_STOCK = 'OUT_OF_STOCK',
-}
+import { RewardType, RewardStatus } from '../../../domain/reward/entities/reward.entity';
 
 @Entity('rewards')
 export class RewardEntity {
@@ -34,9 +22,9 @@ export class RewardEntity {
 
   @Column({
     type: 'enum',
-    enum: RewardTypeEntity,
+    enum: RewardType,
   })
-  type: RewardTypeEntity;
+  type: RewardType;
 
   @Column('int')
   creditCost: number;
@@ -46,6 +34,9 @@ export class RewardEntity {
 
   @Column('varchar', { length: 500, nullable: true })
   imageUrl?: string;
+
+  @Column('varchar', { length: 500 })
+  barcodeImageUrl: string;
 
   @Column('varchar', { length: 100, nullable: true })
   partnerName?: string;
@@ -67,10 +58,10 @@ export class RewardEntity {
 
   @Column({
     type: 'enum',
-    enum: RewardStatusEntity,
-    default: RewardStatusEntity.ACTIVE,
+    enum: RewardStatus,
+    default: RewardStatus.ACTIVE,
   })
-  status: RewardStatusEntity;
+  status: RewardStatus;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -78,7 +69,6 @@ export class RewardEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Relations
   @OneToMany(() => UserRewardEntity, (userReward) => userReward.reward)
   userRewards: UserRewardEntity[];
 }

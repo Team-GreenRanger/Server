@@ -1,11 +1,11 @@
-import { IsString, IsOptional, IsNumber, Min, Max, IsEnum, IsLatitude, IsLongitude } from 'class-validator';
+import { IsOptional, IsNumber, Min, Max, IsEnum, IsString, IsLatitude, IsLongitude } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export enum LocationTypeDto {
   ZERO_WASTE_SHOP = 'ZERO_WASTE_SHOP',
-  RECYCLING_CENTER = 'RECYCLING_CENTER',
   ECO_FRIENDLY_RESTAURANT = 'ECO_FRIENDLY_RESTAURANT',
+  RECYCLING_CENTER = 'RECYCLING_CENTER',
   ELECTRIC_CHARGING_STATION = 'ELECTRIC_CHARGING_STATION',
   BIKE_SHARING_STATION = 'BIKE_SHARING_STATION',
   PUBLIC_TRANSPORT = 'PUBLIC_TRANSPORT',
@@ -16,7 +16,7 @@ export enum LocationTypeDto {
 export enum LocationStatusDto {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
-  TEMPORARILY_CLOSED = 'TEMPORARILY_CLOSED',
+  PENDING_VERIFICATION = 'PENDING_VERIFICATION',
 }
 
 export class EcoLocationResponseDto {
@@ -32,13 +32,13 @@ export class EcoLocationResponseDto {
   @ApiProperty({ enum: LocationTypeDto, description: 'Location type' })
   type: LocationTypeDto;
 
-  @ApiProperty({ description: 'Address' })
+  @ApiProperty({ description: 'Location address' })
   address: string;
 
-  @ApiProperty({ description: 'Latitude' })
+  @ApiProperty({ description: 'Latitude coordinate' })
   latitude: number;
 
-  @ApiProperty({ description: 'Longitude' })
+  @ApiProperty({ description: 'Longitude coordinate' })
   longitude: number;
 
   @ApiPropertyOptional({ description: 'Phone number' })
@@ -50,10 +50,10 @@ export class EcoLocationResponseDto {
   @ApiPropertyOptional({ description: 'Opening hours' })
   openingHours?: string;
 
-  @ApiProperty({ type: [String], description: 'Location image URLs' })
+  @ApiProperty({ type: [String], description: 'Image URLs' })
   imageUrls: string[];
 
-  @ApiProperty({ description: 'Average rating (0-5)' })
+  @ApiProperty({ description: 'Average rating' })
   rating: number;
 
   @ApiProperty({ description: 'Number of reviews' })
@@ -70,43 +70,35 @@ export class EcoLocationResponseDto {
 }
 
 export class LocationSearchQueryDto {
-  @ApiPropertyOptional({ description: 'Search keyword' })
-  @IsOptional()
-  @IsString()
-  keyword?: string;
-
   @ApiPropertyOptional({ enum: LocationTypeDto, description: 'Filter by location type' })
   @IsOptional()
   @IsEnum(LocationTypeDto)
   type?: LocationTypeDto;
 
-  @ApiPropertyOptional({ description: 'Center latitude for distance search' })
+  @ApiPropertyOptional({ description: 'Search keyword' })
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @ApiPropertyOptional({ description: 'Latitude for proximity search' })
   @IsOptional()
   @IsLatitude()
   @Type(() => Number)
   latitude?: number;
 
-  @ApiPropertyOptional({ description: 'Center longitude for distance search' })
+  @ApiPropertyOptional({ description: 'Longitude for proximity search' })
   @IsOptional()
   @IsLongitude()
   @Type(() => Number)
   longitude?: number;
 
-  @ApiPropertyOptional({ description: 'Search radius in kilometers', minimum: 0.1, maximum: 50 })
+  @ApiPropertyOptional({ description: 'Search radius in km', minimum: 0.1, maximum: 50 })
   @IsOptional()
   @IsNumber()
   @Min(0.1)
   @Max(50)
   @Type(() => Number)
   radius?: number;
-
-  @ApiPropertyOptional({ description: 'Minimum rating (0-5)' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(5)
-  @Type(() => Number)
-  minRating?: number;
 
   @ApiPropertyOptional({ description: 'Number of locations to return', minimum: 1, maximum: 100 })
   @IsOptional()
@@ -124,8 +116,36 @@ export class LocationSearchQueryDto {
   offset?: number;
 }
 
+export class NearbyLocationQueryDto {
+  @ApiProperty({ description: 'Latitude coordinate' })
+  @IsLatitude()
+  @Type(() => Number)
+  latitude: number;
+
+  @ApiProperty({ description: 'Longitude coordinate' })
+  @IsLongitude()
+  @Type(() => Number)
+  longitude: number;
+
+  @ApiPropertyOptional({ description: 'Search radius in km', minimum: 0.1, maximum: 50 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(50)
+  @Type(() => Number)
+  radius?: number;
+
+  @ApiPropertyOptional({ description: 'Number of locations to return', minimum: 1, maximum: 100 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
+  limit?: number;
+}
+
 export class LocationListResponseDto {
-  @ApiProperty({ type: [EcoLocationResponseDto], description: 'List of eco-friendly locations' })
+  @ApiProperty({ type: [EcoLocationResponseDto], description: 'List of locations' })
   locations: EcoLocationResponseDto[];
 
   @ApiProperty({ description: 'Total number of locations' })
@@ -151,8 +171,8 @@ export class LocationReviewDto {
   @ApiProperty({ description: 'Rating (1-5)' })
   rating: number;
 
-  @ApiPropertyOptional({ description: 'Review comment' })
-  comment?: string;
+  @ApiProperty({ description: 'Review comment' })
+  comment: string;
 
   @ApiProperty({ description: 'Review creation date' })
   createdAt: Date;
@@ -165,14 +185,13 @@ export class CreateLocationReviewDto {
   @Max(5)
   rating: number;
 
-  @ApiPropertyOptional({ description: 'Review comment' })
-  @IsOptional()
+  @ApiProperty({ description: 'Review comment' })
   @IsString()
-  comment?: string;
+  comment: string;
 }
 
 export class LocationReviewListResponseDto {
-  @ApiProperty({ type: [LocationReviewDto], description: 'List of location reviews' })
+  @ApiProperty({ type: [LocationReviewDto], description: 'List of reviews' })
   reviews: LocationReviewDto[];
 
   @ApiProperty({ description: 'Average rating' })
@@ -183,32 +202,4 @@ export class LocationReviewListResponseDto {
 
   @ApiProperty({ description: 'Whether there are more reviews' })
   hasNext: boolean;
-}
-
-export class NearbyLocationQueryDto {
-  @ApiProperty({ description: 'Current latitude' })
-  @IsLatitude()
-  @Type(() => Number)
-  latitude: number;
-
-  @ApiProperty({ description: 'Current longitude' })
-  @IsLongitude()
-  @Type(() => Number)
-  longitude: number;
-
-  @ApiPropertyOptional({ description: 'Search radius in kilometers', minimum: 0.1, maximum: 10 })
-  @IsOptional()
-  @IsNumber()
-  @Min(0.1)
-  @Max(10)
-  @Type(() => Number)
-  radius?: number;
-
-  @ApiPropertyOptional({ description: 'Number of locations to return', minimum: 1, maximum: 50 })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Max(50)
-  @Type(() => Number)
-  limit?: number;
 }

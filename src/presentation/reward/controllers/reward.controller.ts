@@ -31,13 +31,30 @@ import {
   CreateRewardDto,
   UpdateRewardDto
 } from '../../../application/reward/dto/reward.dto';
+import { GetRewardsUseCase } from '../../../application/reward/use-cases/get-rewards.use-case';
+import { GetRewardByIdUseCase } from '../../../application/reward/use-cases/get-reward-by-id.use-case';
+import { RedeemRewardUseCase } from '../../../application/reward/use-cases/redeem-reward.use-case';
+import { GetUserRewardsUseCase } from '../../../application/reward/use-cases/get-user-rewards.use-case';
+import { GetUserRewardByIdUseCase } from '../../../application/reward/use-cases/get-user-reward-by-id.use-case';
+import { CreateRewardUseCase } from '../../../application/reward/use-cases/create-reward.use-case';
+import { UpdateRewardUseCase } from '../../../application/reward/use-cases/update-reward.use-case';
+import { DeleteRewardUseCase } from '../../../application/reward/use-cases/delete-reward.use-case';
 
 @ApiTags('Rewards')
 @Controller('rewards')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RewardController {
-  constructor() {}
+  constructor(
+    private readonly getRewardsUseCase: GetRewardsUseCase,
+    private readonly getRewardByIdUseCase: GetRewardByIdUseCase,
+    private readonly redeemRewardUseCase: RedeemRewardUseCase,
+    private readonly getUserRewardsUseCase: GetUserRewardsUseCase,
+    private readonly getUserRewardByIdUseCase: GetUserRewardByIdUseCase,
+    private readonly createRewardUseCase: CreateRewardUseCase,
+    private readonly updateRewardUseCase: UpdateRewardUseCase,
+    private readonly deleteRewardUseCase: DeleteRewardUseCase,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get available rewards' })
@@ -47,36 +64,25 @@ export class RewardController {
     type: RewardListResponseDto 
   })
   async getRewards(@Query() queryDto: RewardListQueryDto): Promise<RewardListResponseDto> {
-    // TODO: Implement get rewards use case
-    
-    // Mock data for now
+    const result = await this.getRewardsUseCase.execute({
+      limit: queryDto.limit,
+      offset: queryDto.offset,
+    });
+
     return {
-      rewards: [
-        {
-          id: '1',
-          name: '스타벅스 기프트카드 5,000원',
-          description: '친환경 컵 사용 권장 스타벅스 기프트카드',
-          type: 'GIFT_CARD' as any,
-          cost: 500,
-          imageUrl: 'https://example.com/starbucks.jpg',
-          availableQuantity: 100,
-          status: 'AVAILABLE' as any,
-          createdAt: new Date(),
-        },
-        {
-          id: '2',
-          name: '친환경 텀블러',
-          description: '재사용 가능한 스테인리스 텀블러',
-          type: 'ECO_PRODUCT' as any,
-          cost: 800,
-          imageUrl: 'https://example.com/tumbler.jpg',
-          availableQuantity: 50,
-          status: 'AVAILABLE' as any,
-          createdAt: new Date(),
-        },
-      ],
-      total: 2,
-      hasNext: false,
+      rewards: result.rewards.map(reward => ({
+        id: reward.id,
+        name: reward.title,
+        description: reward.description,
+        type: reward.type as any,
+        cost: reward.creditCost,
+        imageUrl: reward.imageUrl,
+        availableQuantity: reward.remainingQuantity || 0,
+        status: reward.status as any,
+        createdAt: reward.createdAt,
+      })),
+      total: result.total,
+      hasNext: result.hasNext,
     };
   }
 
@@ -90,18 +96,19 @@ export class RewardController {
   })
   @ApiNotFoundResponse({ description: 'Reward not found' })
   async getRewardById(@Param('id') id: string): Promise<RewardResponseDto> {
-    // TODO: Implement get reward by ID use case
-    
+    const result = await this.getRewardByIdUseCase.execute({ id });
+    const reward = result.reward;
+
     return {
-      id,
-      name: '스타벅스 기프트카드 5,000원',
-      description: '친환경 컵 사용 권장 스타벅스 기프트카드',
-      type: 'GIFT_CARD' as any,
-      cost: 500,
-      imageUrl: 'https://example.com/starbucks.jpg',
-      availableQuantity: 100,
-      status: 'AVAILABLE' as any,
-      createdAt: new Date(),
+      id: reward.id,
+      name: reward.title,
+      description: reward.description,
+      type: reward.type as any,
+      cost: reward.creditCost,
+      imageUrl: reward.imageUrl,
+      availableQuantity: reward.remainingQuantity || 0,
+      status: reward.status as any,
+      createdAt: reward.createdAt,
     };
   }
 
@@ -117,19 +124,26 @@ export class RewardController {
     @Request() req: any,
     @Body() redeemDto: RedeemRewardDto,
   ): Promise<UserRewardResponseDto> {
-    // TODO: Implement redeem reward use case
     const userId = req.user.sub;
     
-    return {
-      id: 'user-reward-1',
+    const result = await this.redeemRewardUseCase.execute({
       userId,
       rewardId: redeemDto.rewardId,
-      creditCost: 500,
-      status: 'PENDING' as any,
-      redemptionCode: 'RW' + Date.now(),
       deliveryAddress: redeemDto.deliveryAddress,
-      redeemedAt: new Date(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+    });
+
+    const userReward = result.userReward;
+
+    return {
+      id: userReward.id,
+      userId: userReward.userId,
+      rewardId: userReward.rewardId,
+      creditCost: 0, // Will be filled from transaction
+      status: userReward.status as any,
+      redemptionCode: userReward.couponCode || '',
+      deliveryAddress: redeemDto.deliveryAddress,
+      redeemedAt: userReward.purchasedAt,
+      expiresAt: userReward.expiresAt,
     };
   }
 
@@ -144,36 +158,38 @@ export class RewardController {
     @Request() req: any,
     @Query() queryDto: UserRewardListQueryDto,
   ): Promise<UserRewardListResponseDto> {
-    // TODO: Implement get user rewards use case
     const userId = req.user.sub;
     
-    // Mock data for now
+    const result = await this.getUserRewardsUseCase.execute({
+      userId,
+      limit: queryDto.limit,
+      offset: queryDto.offset,
+    });
+
     return {
-      userRewards: [
-        {
-          id: 'user-reward-1',
-          userId,
-          rewardId: '1',
-          creditCost: 500,
-          status: 'CONFIRMED' as any,
-          redemptionCode: 'RW1234567890',
-          redeemedAt: new Date(Date.now() - 86400000), // 1 day ago
-          expiresAt: new Date(Date.now() + 29 * 24 * 60 * 60 * 1000), // 29 days
-          reward: {
-            id: '1',
-            name: '스타벅스 기프트카드 5,000원',
-            description: '친환경 컵 사용 권장 스타벅스 기프트카드',
-            type: 'GIFT_CARD' as any,
-            cost: 500,
-            imageUrl: 'https://example.com/starbucks.jpg',
-            availableQuantity: 100,
-            status: 'AVAILABLE' as any,
-            createdAt: new Date(),
-          },
+      userRewards: result.userRewards.map(item => ({
+        id: item.userReward.id,
+        userId: item.userReward.userId,
+        rewardId: item.userReward.rewardId,
+        creditCost: item.reward.creditCost,
+        status: item.userReward.status as any,
+        redemptionCode: item.userReward.couponCode || '',
+        redeemedAt: item.userReward.purchasedAt,
+        expiresAt: item.userReward.expiresAt,
+        reward: {
+          id: item.reward.id,
+          name: item.reward.title,
+          description: item.reward.description,
+          type: item.reward.type,
+          cost: item.reward.creditCost,
+          imageUrl: item.reward.imageUrl,
+          availableQuantity: item.reward.remainingQuantity || 0,
+          status: item.reward.status,
+          createdAt: item.reward.createdAt,
         },
-      ],
-      total: 1,
-      hasNext: false,
+      })),
+      total: result.total,
+      hasNext: result.hasNext,
     };
   }
 
@@ -190,28 +206,32 @@ export class RewardController {
     @Request() req: any,
     @Param('id') id: string
   ): Promise<UserRewardResponseDto> {
-    // TODO: Implement get user reward by ID use case
     const userId = req.user.sub;
     
-    return {
-      id,
+    const result = await this.getUserRewardByIdUseCase.execute({
       userId,
-      rewardId: '1',
-      creditCost: 500,
-      status: 'CONFIRMED' as any,
-      redemptionCode: 'RW1234567890',
-      redeemedAt: new Date(Date.now() - 86400000),
-      expiresAt: new Date(Date.now() + 29 * 24 * 60 * 60 * 1000),
+      userRewardId: id,
+    });
+
+    return {
+      id: result.userReward.id,
+      userId: result.userReward.userId,
+      rewardId: result.userReward.rewardId,
+      creditCost: result.reward.creditCost,
+      status: result.userReward.status as any,
+      redemptionCode: result.userReward.couponCode || '',
+      redeemedAt: result.userReward.purchasedAt,
+      expiresAt: result.userReward.expiresAt,
       reward: {
-        id: '1',
-        name: '스타벅스 기프트카드 5,000원',
-        description: '친환경 컵 사용 권장 스타벅스 기프트카드',
-        type: 'GIFT_CARD' as any,
-        cost: 500,
-        imageUrl: 'https://example.com/starbucks.jpg',
-        availableQuantity: 100,
-        status: 'AVAILABLE' as any,
-        createdAt: new Date(),
+        id: result.reward.id,
+        name: result.reward.title,
+        description: result.reward.description,
+        type: result.reward.type,
+        cost: result.reward.creditCost,
+        imageUrl: result.reward.imageUrl,
+        availableQuantity: 0,
+        status: result.reward.status,
+        createdAt: result.reward.createdAt,
       },
     };
   }
@@ -226,19 +246,34 @@ export class RewardController {
   })
   @ApiBadRequestResponse({ description: 'Invalid reward data' })
   async createReward(@Body() createRewardDto: CreateRewardDto): Promise<RewardResponseDto> {
-    // TODO: Implement create reward use case
-    
-    return {
-      id: 'reward-' + Date.now(),
-      name: createRewardDto.name,
+    const result = await this.createRewardUseCase.execute({
+      title: createRewardDto.name,
       description: createRewardDto.description,
-      type: createRewardDto.type,
-      cost: createRewardDto.cost,
+      type: createRewardDto.type as any,
+      creditCost: createRewardDto.cost,
+      barcodeImageUrl: createRewardDto.barcodeImageUrl,
+      originalPrice: createRewardDto.originalPrice,
       imageUrl: createRewardDto.imageUrl,
-      availableQuantity: createRewardDto.availableQuantity,
-      status: 'AVAILABLE' as any,
+      partnerName: createRewardDto.partnerName,
+      partnerLogoUrl: createRewardDto.partnerLogoUrl,
+      termsAndConditions: createRewardDto.termsAndConditions,
+      validityDays: createRewardDto.validityDays,
+      totalQuantity: createRewardDto.totalQuantity,
+    });
+
+    const reward = result.reward;
+
+    return {
+      id: reward.id,
+      name: reward.title,
+      description: reward.description,
+      type: reward.type as any,
+      cost: reward.creditCost,
+      imageUrl: reward.imageUrl,
+      availableQuantity: reward.remainingQuantity || 0,
+      status: reward.status as any,
       expiryDate: createRewardDto.expiryDate,
-      createdAt: new Date(),
+      createdAt: reward.createdAt,
     };
   }
 
@@ -256,19 +291,29 @@ export class RewardController {
     @Param('id') id: string,
     @Body() updateRewardDto: UpdateRewardDto
   ): Promise<RewardResponseDto> {
-    // TODO: Implement update reward use case
-    
-    return {
+    const result = await this.updateRewardUseCase.execute({
       id,
-      name: updateRewardDto.name || '스타벅스 기프트카드 5,000원',
-      description: updateRewardDto.description || '친환경 컵 사용 권장 스타벅스 기프트카드',
-      type: 'GIFT_CARD' as any,
-      cost: updateRewardDto.cost || 500,
-      imageUrl: updateRewardDto.imageUrl || 'https://example.com/starbucks.jpg',
-      availableQuantity: updateRewardDto.availableQuantity || 100,
-      status: updateRewardDto.status || 'AVAILABLE' as any,
+      title: updateRewardDto.name,
+      description: updateRewardDto.description,
+      creditCost: updateRewardDto.cost,
+      imageUrl: updateRewardDto.imageUrl,
+      totalQuantity: updateRewardDto.totalQuantity,
+      status: updateRewardDto.status as any,
+    });
+
+    const reward = result.reward;
+
+    return {
+      id: reward.id,
+      name: reward.title,
+      description: reward.description,
+      type: reward.type as any,
+      cost: reward.creditCost,
+      imageUrl: reward.imageUrl,
+      availableQuantity: reward.remainingQuantity || 0,
+      status: reward.status as any,
       expiryDate: updateRewardDto.expiryDate,
-      createdAt: new Date(),
+      createdAt: reward.createdAt,
     };
   }
 
@@ -278,8 +323,8 @@ export class RewardController {
   @ApiResponse({ status: 200, description: 'Reward deleted successfully' })
   @ApiNotFoundResponse({ description: 'Reward not found' })
   async deleteReward(@Param('id') id: string): Promise<{ message: string }> {
-    // TODO: Implement delete reward use case
+    const result = await this.deleteRewardUseCase.execute({ id });
     
-    return { message: 'Reward deleted successfully' };
+    return { message: result.message };
   }
 }

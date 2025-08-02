@@ -49,6 +49,17 @@ export class TypeOrmMissionRepository implements IMissionRepository {
     return missionEntities.map(entity => this.toDomain(entity));
   }
 
+  async findRandomActiveMissions(count: number): Promise<Mission[]> {
+    const missionEntities = await this.missionRepository
+      .createQueryBuilder('mission')
+      .where('mission.status = :status', { status: MissionStatus.ACTIVE })
+      .orderBy('RAND()', 'ASC')
+      .limit(count)
+      .getMany();
+    
+    return missionEntities.map(entity => this.toDomain(entity));
+  }
+
   async update(id: string, missionData: Partial<Mission>): Promise<Mission> {
     await this.missionRepository.update(id, missionData as any);
     const updatedEntity = await this.missionRepository.findOne({ where: { id } });

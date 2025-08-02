@@ -14,6 +14,7 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { GetCarbonCreditBalanceUseCase } from '../../../application/carbon-credit/use-cases/get-carbon-credit-balance.use-case';
 import { GetTransactionHistoryUseCase } from '../../../application/carbon-credit/use-cases/get-transaction-history.use-case';
+import { GetCarbonCreditStatisticsUseCase } from '../../../application/carbon-credit/use-cases/get-carbon-credit-statistics.use-case';
 import { TransactionType } from '../../../domain/carbon-credit/entities/carbon-credit.entity';
 import { 
   CarbonCreditBalanceResponseDto,
@@ -33,6 +34,7 @@ export class CarbonCreditController {
   constructor(
     private readonly getCarbonCreditBalanceUseCase: GetCarbonCreditBalanceUseCase,
     private readonly getTransactionHistoryUseCase: GetTransactionHistoryUseCase,
+    private readonly getCarbonCreditStatisticsUseCase: GetCarbonCreditStatisticsUseCase,
   ) {}
 
   @Get('balance')
@@ -108,17 +110,17 @@ export class CarbonCreditController {
     type: CarbonCreditStatisticsResponseDto 
   })
   async getStatistics(@Request() req: any): Promise<CarbonCreditStatisticsResponseDto> {
-    // TODO: Implement carbon credit statistics use case
     const userId = req.user.sub;
     
-    // Mock data for now
+    const result = await this.getCarbonCreditStatisticsUseCase.execute({ userId });
+
     return {
-      currentBalance: 4400,
-      thisMonthEarned: 1200,
-      thisMonthSpent: 800,
-      averageDailyEarnings: 40,
-      topEarningSource: 'MISSION',
-      globalRanking: 1,
+      currentBalance: result.currentBalance,
+      thisMonthEarned: result.thisMonthEarned,
+      thisMonthSpent: result.thisMonthSpent,
+      averageDailyEarnings: result.averageDailyEarnings,
+      topEarningSource: result.topEarningSource,
+      globalRanking: result.globalRanking,
     };
   }
 }

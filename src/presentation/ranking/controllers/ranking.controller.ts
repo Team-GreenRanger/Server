@@ -19,13 +19,19 @@ import {
   LeaderboardResponseDto,
   CurrentUserRankingDto
 } from '../../../application/ranking/dto/ranking.dto';
+import { GetCurrentRankingsUseCase } from '../../../application/ranking/use-cases/get-current-rankings.use-case';
+import { GetCurrentUserRankingUseCase } from '../../../application/ranking/use-cases/get-current-user-ranking.use-case';
+import { RankingType } from '../../../domain/ranking/entities/ranking-snapshot.entity';
 
 @ApiTags('Rankings')
 @Controller('rankings')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RankingController {
-  constructor() {}
+  constructor(
+    private readonly getCurrentRankingsUseCase: GetCurrentRankingsUseCase,
+    private readonly getCurrentUserRankingUseCase: GetCurrentUserRankingUseCase,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get user rankings' })
@@ -35,42 +41,20 @@ export class RankingController {
     type: RankingListResponseDto 
   })
   async getRankings(@Query() queryDto: RankingListQueryDto): Promise<RankingListResponseDto> {
-    // TODO: Implement get rankings use case
+    const type = queryDto.type ? (queryDto.type as unknown as RankingType) : RankingType.CARBON_CREDITS;
     
-    // Mock data for now
+    const result = await this.getCurrentRankingsUseCase.execute({
+      type,
+      limit: queryDto.limit,
+      offset: queryDto.offset,
+    });
+
     return {
-      rankings: [
-        {
-          rank: 1,
-          userId: 'user-1',
-          userName: '김환경',
-          profileImageUrl: 'https://example.com/avatar1.jpg',
-          score: 5200,
-          level: 5,
-          isCurrentUser: false,
-        },
-        {
-          rank: 2,
-          userId: 'user-2',
-          userName: '이지구',
-          profileImageUrl: 'https://example.com/avatar2.jpg',
-          score: 4800,
-          level: 4,
-          isCurrentUser: false,
-        },
-        {
-          rank: 3,
-          userId: 'user-3',
-          userName: '박자연',
-          score: 4400,
-          level: 4,
-          isCurrentUser: true,
-        },
-      ],
-      total: 1000,
-      type: queryDto.type || 'CARBON_CREDITS' as any,
+      rankings: result.rankings,
+      total: result.total,
+      type: type as any,
       period: queryDto.period || 'ALL_TIME' as any,
-      hasNext: true,
+      hasNext: result.hasNext,
     };
   }
 
@@ -82,16 +66,20 @@ export class RankingController {
     type: CurrentUserRankingDto 
   })
   async getCurrentUserRanking(@Request() req: any): Promise<CurrentUserRankingDto> {
-    // TODO: Implement get current user ranking use case
     const userId = req.user.sub;
     
+    const result = await this.getCurrentUserRankingUseCase.execute({
+      userId,
+      type: RankingType.CARBON_CREDITS,
+    });
+
     return {
-      currentRank: 3,
-      currentScore: 4400,
-      previousRank: 5,
-      rankChange: 2, // Improved by 2 positions
-      scoreToNextRank: 400,
-      nextRankPosition: 2,
+      currentRank: result.currentRank,
+      currentScore: result.currentScore,
+      previousRank: result.previousRank || result.currentRank,
+      rankChange: result.rankChange || 0,
+      scoreToNextRank: result.scoreToNextRank || 0,
+      nextRankPosition: result.nextRankPosition || result.currentRank - 1,
     };
   }
 
@@ -103,99 +91,41 @@ export class RankingController {
     type: RankingStatsResponseDto 
   })
   async getRankingStats(@Request() req: any): Promise<RankingStatsResponseDto> {
-    // TODO: Implement get ranking stats use case
     const userId = req.user.sub;
     
+    const currentUserRanking = await this.getCurrentUserRankingUseCase.execute({
+      userId,
+      type: RankingType.CARBON_CREDITS,
+    });
+
+    const topCarbonUsers = await this.getCurrentRankingsUseCase.execute({
+      type: RankingType.CARBON_CREDITS,
+      limit: 3,
+    });
+
+    const topMissionUsers = await this.getCurrentRankingsUseCase.execute({
+      type: RankingType.MISSIONS_COMPLETED,
+      limit: 3,
+    });
+
+    const topCo2Users = await this.getCurrentRankingsUseCase.execute({
+      type: RankingType.CO2_REDUCTION,
+      limit: 3,
+    });
+
     return {
-      totalUsers: 1000,
+      totalUsers: topCarbonUsers.total,
       currentUser: {
-        currentRank: 3,
-        currentScore: 4400,
-        previousRank: 5,
-        rankChange: 2,
-        scoreToNextRank: 400,
-        nextRankPosition: 2,
+        currentRank: currentUserRanking.currentRank,
+        currentScore: currentUserRanking.currentScore,
+        previousRank: currentUserRanking.previousRank || currentUserRanking.currentRank,
+        rankChange: currentUserRanking.rankChange || 0,
+        scoreToNextRank: currentUserRanking.scoreToNextRank || 0,
+        nextRankPosition: currentUserRanking.nextRankPosition || currentUserRanking.currentRank - 1,
       },
-      topCarbonCreditUsers: [
-        {
-          rank: 1,
-          userId: 'user-1',
-          userName: '김환경',
-          profileImageUrl: 'https://example.com/avatar1.jpg',
-          score: 5200,
-          level: 5,
-          isCurrentUser: false,
-        },
-        {
-          rank: 2,
-          userId: 'user-2',
-          userName: '이지구',
-          profileImageUrl: 'https://example.com/avatar2.jpg',
-          score: 4800,
-          level: 4,
-          isCurrentUser: false,
-        },
-        {
-          rank: 3,
-          userId: userId,
-          userName: '박자연',
-          score: 4400,
-          level: 4,
-          isCurrentUser: true,
-        },
-      ],
-      topMissionUsers: [
-        {
-          rank: 1,
-          userId: 'user-4',
-          userName: '최미션',
-          score: 45, // Number of missions completed
-          level: 4,
-          isCurrentUser: false,
-        },
-        {
-          rank: 2,
-          userId: 'user-5',
-          userName: '정완수',
-          score: 42,
-          level: 4,
-          isCurrentUser: false,
-        },
-        {
-          rank: 3,
-          userId: 'user-6',
-          userName: '한실천',
-          score: 38,
-          level: 3,
-          isCurrentUser: false,
-        },
-      ],
-      topCo2ReductionUsers: [
-        {
-          rank: 1,
-          userId: 'user-7',
-          userName: '송탄소',
-          score: 245.8, // CO2 reduction in kg
-          level: 5,
-          isCurrentUser: false,
-        },
-        {
-          rank: 2,
-          userId: 'user-8',
-          userName: '윤감축',
-          score: 198.5,
-          level: 4,
-          isCurrentUser: false,
-        },
-        {
-          rank: 3,
-          userId: 'user-9',
-          userName: '강절약',
-          score: 175.2,
-          level: 4,
-          isCurrentUser: false,
-        },
-      ],
+      topCarbonCreditUsers: topCarbonUsers.rankings.map(r => ({ ...r, isCurrentUser: r.userId === userId })),
+      topMissionUsers: topMissionUsers.rankings.map(r => ({ ...r, isCurrentUser: r.userId === userId })),
+      topCo2ReductionUsers: topCo2Users.rankings.map(r => ({ ...r, isCurrentUser: r.userId === userId })),
     };
   }
 
@@ -207,67 +137,47 @@ export class RankingController {
     type: LeaderboardResponseDto 
   })
   async getLeaderboard(@Request() req: any): Promise<LeaderboardResponseDto> {
-    // TODO: Implement get leaderboard use case
     const userId = req.user.sub;
     
-    const mockRankings = [
-      {
-        rank: 1,
-        userId: 'user-1',
-        userName: '김환경',
-        profileImageUrl: 'https://example.com/avatar1.jpg',
-        score: 5200,
-        level: 5,
-        isCurrentUser: false,
-      },
-      {
-        rank: 2,
-        userId: 'user-2',
-        userName: '이지구',
-        profileImageUrl: 'https://example.com/avatar2.jpg',
-        score: 4800,
-        level: 4,
-        isCurrentUser: false,
-      },
-      {
-        rank: 3,
-        userId: userId,
-        userName: '박자연',
-        score: 4400,
-        level: 4,
-        isCurrentUser: true,
-      },
-    ];
+    const currentUserRanking = await this.getCurrentUserRankingUseCase.execute({
+      userId,
+      type: RankingType.CARBON_CREDITS,
+    });
+
+    const carbonRankings = await this.getCurrentRankingsUseCase.execute({
+      type: RankingType.CARBON_CREDITS,
+      limit: 10,
+    });
+
+    // For MVP, we'll use the same rankings for weekly, monthly, and all-time
+    // In production, this would query different time periods
+    const baseRanking = {
+      rankings: carbonRankings.rankings.map(r => ({ ...r, isCurrentUser: r.userId === userId })),
+      total: carbonRankings.total,
+      type: 'CARBON_CREDITS' as any,
+      hasNext: carbonRankings.hasNext,
+    };
 
     return {
       weekly: {
-        rankings: mockRankings,
-        total: 1000,
-        type: 'CARBON_CREDITS' as any,
+        ...baseRanking,
         period: 'WEEKLY' as any,
-        hasNext: true,
       },
       monthly: {
-        rankings: mockRankings,
-        total: 1000,
-        type: 'CARBON_CREDITS' as any,
+        ...baseRanking,
         period: 'MONTHLY' as any,
-        hasNext: true,
       },
       allTime: {
-        rankings: mockRankings,
-        total: 1000,
-        type: 'CARBON_CREDITS' as any,
+        ...baseRanking,
         period: 'ALL_TIME' as any,
-        hasNext: true,
       },
       currentUserStats: {
-        currentRank: 3,
-        currentScore: 4400,
-        previousRank: 5,
-        rankChange: 2,
-        scoreToNextRank: 400,
-        nextRankPosition: 2,
+        currentRank: currentUserRanking.currentRank,
+        currentScore: currentUserRanking.currentScore,
+        previousRank: currentUserRanking.previousRank || currentUserRanking.currentRank,
+        rankChange: currentUserRanking.rankChange || 0,
+        scoreToNextRank: currentUserRanking.scoreToNextRank || 0,
+        nextRankPosition: currentUserRanking.nextRankPosition || currentUserRanking.currentRank - 1,
       },
     };
   }

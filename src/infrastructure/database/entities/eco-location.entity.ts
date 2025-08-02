@@ -5,15 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-export enum LocationTypeEntity {
-  ECO_SPOT = 'ECO_SPOT',                    // 친환경 장소
-  RECYCLING_CENTER = 'RECYCLING_CENTER',   // 재활용센터
-  BIKE_SHARING = 'BIKE_SHARING',            // 자전거 공유 지점
-  PUBLIC_TRANSPORT = 'PUBLIC_TRANSPORT',    // 대중교통 정류장
-  GREEN_MARKET = 'GREEN_MARKET',            // 친환경 마켓
-  CHARGING_STATION = 'CHARGING_STATION',   // 전기차 충전소
-}
+import { LocationType, LocationStatus } from '../../../domain/location/entities/location.entity';
 
 @Entity('eco_locations')
 export class EcoLocationEntity {
@@ -28,9 +20,9 @@ export class EcoLocationEntity {
 
   @Column({
     type: 'enum',
-    enum: LocationTypeEntity,
+    enum: LocationType,
   })
-  type: LocationTypeEntity;
+  type: LocationType;
 
   @Column('decimal', { precision: 10, scale: 8 })
   latitude: number;
@@ -47,8 +39,14 @@ export class EcoLocationEntity {
   @Column('varchar', { length: 200, nullable: true })
   website?: string;
 
+  @Column('varchar', { length: 200, nullable: true })
+  websiteUrl?: string;
+
   @Column('json', { nullable: true })
   operatingHours?: Record<string, string>;
+
+  @Column('text', { nullable: true })
+  openingHours?: string;
 
   @Column('json', { nullable: true })
   amenities?: string[];
@@ -58,6 +56,19 @@ export class EcoLocationEntity {
 
   @Column('varchar', { length: 500, nullable: true })
   imageUrl?: string;
+
+  @Column('json', { nullable: true })
+  imageUrls?: string[];
+
+  @Column('int', { default: 0 })
+  reviewCount: number;
+
+  @Column({
+    type: 'enum',
+    enum: LocationStatus,
+    default: LocationStatus.ACTIVE
+  })
+  status: LocationStatus;
 
   @Column('boolean', { default: true })
   isActive: boolean;

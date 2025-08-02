@@ -15,6 +15,7 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ChatWithAIUseCase } from '../../../application/ai-assistant/use-cases/chat-with-ai.use-case';
 import { VerifyImageWithAIUseCase } from '../../../application/ai-assistant/use-cases/verify-image-with-ai.use-case';
+import { GetConversationsUseCase } from '../../../application/ai-assistant/use-cases/get-conversations.use-case';
 import { GeminiService } from '../../../infrastructure/external-apis/gemini/gemini.service';
 import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 import { 
@@ -36,6 +37,7 @@ export class AIAssistantController {
   constructor(
     private readonly chatWithAIUseCase: ChatWithAIUseCase,
     private readonly verifyImageWithAIUseCase: VerifyImageWithAIUseCase,
+    private readonly getConversationsUseCase: GetConversationsUseCase,
     private readonly geminiService: GeminiService,
     private readonly claudeService: ClaudeService,
   ) {}
@@ -122,13 +124,13 @@ export class AIAssistantController {
     type: ConversationListResponseDto 
   })
   async getConversations(@Request() req: any): Promise<ConversationListResponseDto> {
-    // TODO: Implement conversation history retrieval
     const userId = req.user.sub;
     
-    // Mock data for now
+    const result = await this.getConversationsUseCase.execute({ userId });
+    
     return {
-      conversations: [],
-      total: 0,
+      conversations: result.conversations,
+      total: result.total,
     };
   }
 

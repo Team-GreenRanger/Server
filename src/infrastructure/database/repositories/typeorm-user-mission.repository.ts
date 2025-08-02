@@ -67,6 +67,21 @@ export class TypeOrmUserMissionRepository implements IUserMissionRepository {
     return userMissionEntities.map(entity => this.toDomain(entity));
   }
 
+  async findTodayAssignedMissions(userId: string): Promise<UserMission[]> {
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+
+    const userMissionEntities = await this.userMissionRepository
+      .createQueryBuilder('userMission')
+      .where('userMission.userId = :userId', { userId })
+      .andWhere('userMission.assignedAt >= :startOfDay', { startOfDay })
+      .andWhere('userMission.assignedAt < :endOfDay', { endOfDay })
+      .getMany();
+    
+    return userMissionEntities.map(entity => this.toDomain(entity));
+  }
+
   async update(id: string, userMissionData: Partial<UserMission>): Promise<UserMission> {
     await this.userMissionRepository.update(id, userMissionData as any);
     const updatedEntity = await this.userMissionRepository.findOne({ where: { id } });

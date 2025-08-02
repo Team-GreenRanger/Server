@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { NotificationTypeDto } from '../dto/notification.dto';
+import type { INotificationRepository } from '../../../domain/notification/repositories/notification.repository.interface';
+import { NOTIFICATION_REPOSITORY } from '../../../domain/notification/repositories/notification.repository.interface';
+import { Notification, NotificationType } from '../../../domain/notification/entities/notification.entity';
 
 export interface CreateNotificationRequest {
   userId: string;
@@ -11,15 +14,21 @@ export interface CreateNotificationRequest {
 
 @Injectable()
 export class NotificationService {
+  constructor(
+    @Inject(NOTIFICATION_REPOSITORY)
+    private readonly notificationRepository: INotificationRepository,
+  ) {}
   
   async createNotification(request: CreateNotificationRequest): Promise<void> {
-    // TODO: Save notification to database
-    console.log(`Creating notification for user ${request.userId}:`, {
-      type: request.type,
+    const notification = Notification.create({
+      userId: request.userId,
+      type: request.type as unknown as NotificationType,
       title: request.title,
       message: request.message,
       relatedId: request.relatedId,
     });
+
+    await this.notificationRepository.save(notification);
   }
 
   async createMissionCompletedNotification(userId: string, missionTitle: string, creditEarned: number): Promise<void> {

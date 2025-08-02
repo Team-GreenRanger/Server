@@ -8,6 +8,7 @@ export interface IMissionRepository {
   findByStatus(status: MissionStatus): Promise<Mission[]>;
   findByType(type: MissionType): Promise<Mission[]>;
   findByDifficulty(difficulty: DifficultyLevel): Promise<Mission[]>;
+  findRandomActiveMissions(count: number): Promise<Mission[]>;
   update(id: string, mission: Partial<Mission>): Promise<Mission>;
   delete(id: string): Promise<void>;
 }
@@ -20,6 +21,7 @@ export interface IUserMissionRepository {
   findByMissionId(missionId: string): Promise<UserMission[]>;
   findUserMissionWithMission(userId: string, missionId: string): Promise<UserMission | null>;
   findCompletedMissionsByUserId(userId: string): Promise<UserMission[]>;
+  findTodayAssignedMissions(userId: string): Promise<UserMission[]>;
   update(id: string, userMission: Partial<UserMission>): Promise<UserMission>;
   delete(id: string): Promise<void>;
   countCompletedMissions(userId: string): Promise<number>;

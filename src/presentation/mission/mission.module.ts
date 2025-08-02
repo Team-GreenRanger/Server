@@ -4,6 +4,10 @@ import { MissionController } from './controllers/mission.controller';
 import { AssignMissionUseCase } from '../../application/mission/use-cases/assign-mission.use-case';
 import { SubmitMissionUseCase } from '../../application/mission/use-cases/submit-mission.use-case';
 import { VerifyMissionUseCase } from '../../application/mission/use-cases/verify-mission.use-case';
+import { GetMissionsUseCase } from '../../application/mission/use-cases/get-missions.use-case';
+import { GetMissionByIdUseCase } from '../../application/mission/use-cases/get-mission-by-id.use-case';
+import { GetUserMissionsUseCase } from '../../application/mission/use-cases/get-user-missions.use-case';
+import { GetDailyMissionsUseCase } from '../../application/mission/use-cases/get-daily-missions.use-case';
 import { MissionEntity } from '../../infrastructure/database/entities/mission.entity';
 import { UserMissionEntity } from '../../infrastructure/database/entities/user-mission.entity';
 import { CarbonCreditEntity } from '../../infrastructure/database/entities/carbon-credit.entity';
@@ -31,6 +35,10 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
     AssignMissionUseCase,
     SubmitMissionUseCase,
     VerifyMissionUseCase,
+    GetMissionsUseCase,
+    GetMissionByIdUseCase,
+    GetUserMissionsUseCase,
+    GetDailyMissionsUseCase,
     {
       provide: MISSION_REPOSITORY,
       useClass: TypeOrmMissionRepository,

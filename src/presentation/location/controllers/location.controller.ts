@@ -27,13 +27,26 @@ import {
   LocationReviewListResponseDto,
   NearbyLocationQueryDto
 } from '../../../application/location/dto/location.dto';
+import { SearchLocationsUseCase } from '../../../application/location/use-cases/search-locations.use-case';
+import { GetNearbyLocationsUseCase } from '../../../application/location/use-cases/get-nearby-locations.use-case';
+import { GetLocationByIdUseCase } from '../../../application/location/use-cases/get-location-by-id.use-case';
+import { GetLocationReviewsUseCase } from '../../../application/location/use-cases/get-location-reviews.use-case';
+import { CreateLocationReviewUseCase } from '../../../application/location/use-cases/create-location-review.use-case';
+import { GetLocationTypeStatsUseCase } from '../../../application/location/use-cases/get-location-type-stats.use-case';
 
 @ApiTags('Locations')
 @Controller('locations')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class LocationController {
-  constructor() {}
+  constructor(
+    private readonly searchLocationsUseCase: SearchLocationsUseCase,
+    private readonly getNearbyLocationsUseCase: GetNearbyLocationsUseCase,
+    private readonly getLocationByIdUseCase: GetLocationByIdUseCase,
+    private readonly getLocationReviewsUseCase: GetLocationReviewsUseCase,
+    private readonly createLocationReviewUseCase: CreateLocationReviewUseCase,
+    private readonly getLocationTypeStatsUseCase: GetLocationTypeStatsUseCase,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Search eco-friendly locations' })
@@ -43,49 +56,36 @@ export class LocationController {
     type: LocationListResponseDto 
   })
   async searchLocations(@Query() queryDto: LocationSearchQueryDto): Promise<LocationListResponseDto> {
-    // TODO: Implement search locations use case
-    
-    // Mock data for now
+    const result = await this.searchLocationsUseCase.execute({
+      type: queryDto.type as any,
+      latitude: queryDto.latitude,
+      longitude: queryDto.longitude,
+      radius: queryDto.radius,
+      limit: queryDto.limit,
+      offset: queryDto.offset,
+    });
+
     return {
-      locations: [
-        {
-          id: '1',
-          name: '제로웨이스트샵 지구',
-          description: '친환경 생활용품과 리필 상품을 판매하는 제로웨이스트 매장',
-          type: 'ZERO_WASTE_SHOP' as any,
-          address: '서울시 강남구 테헤란로 123',
-          latitude: 37.5012,
-          longitude: 127.0396,
-          phoneNumber: '02-1234-5678',
-          websiteUrl: 'https://zerowaste-earth.co.kr',
-          openingHours: '10:00-20:00 (월-토), 휴무 (일)',
-          imageUrls: ['https://example.com/shop1.jpg', 'https://example.com/shop2.jpg'],
-          rating: 4.8,
-          reviewCount: 127,
-          status: 'ACTIVE' as any,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '2',
-          name: '친환경 카페 그린',
-          description: '유기농 원두와 재사용 컵을 사용하는 친환경 카페',
-          type: 'ECO_FRIENDLY_RESTAURANT' as any,
-          address: '서울시 마포구 홍대입구역 근처',
-          latitude: 37.5563,
-          longitude: 126.9236,
-          phoneNumber: '02-9876-5432',
-          openingHours: '08:00-22:00 (매일)',
-          imageUrls: ['https://example.com/cafe1.jpg'],
-          rating: 4.5,
-          reviewCount: 89,
-          status: 'ACTIVE' as any,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-      total: 2,
-      hasNext: false,
+      locations: result.locations.map(location => ({
+        id: location.id,
+        name: location.name,
+        description: location.description,
+        type: location.type as any,
+        address: location.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        phoneNumber: location.phoneNumber,
+        websiteUrl: location.websiteUrl,
+        openingHours: location.openingHours,
+        imageUrls: location.imageUrls,
+        rating: location.rating,
+        reviewCount: location.reviewCount,
+        status: location.status as any,
+        createdAt: location.createdAt,
+        updatedAt: location.updatedAt,
+      })),
+      total: result.total,
+      hasNext: result.hasNext,
     };
   }
 

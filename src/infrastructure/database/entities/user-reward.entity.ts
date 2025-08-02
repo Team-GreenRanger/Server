@@ -9,13 +9,7 @@ import {
 } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { RewardEntity } from './reward.entity';
-
-export enum UserRewardStatusEntity {
-  PURCHASED = 'PURCHASED',
-  USED = 'USED',
-  EXPIRED = 'EXPIRED',
-  REFUNDED = 'REFUNDED',
-}
+import { UserRewardStatus } from '../../../domain/reward/entities/reward.entity';
 
 @Entity('user_rewards')
 export class UserRewardEntity {
@@ -36,10 +30,10 @@ export class UserRewardEntity {
 
   @Column({
     type: 'enum',
-    enum: UserRewardStatusEntity,
-    default: UserRewardStatusEntity.PURCHASED,
+    enum: UserRewardStatus,
+    default: UserRewardStatus.PURCHASED,
   })
-  status: UserRewardStatusEntity;
+  status: UserRewardStatus;
 
   @CreateDateColumn()
   purchasedAt: Date;
@@ -53,7 +47,6 @@ export class UserRewardEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Relations
   @ManyToOne(() => UserEntity, (user) => user.userRewards)
   @JoinColumn({ name: 'userId' })
   user: UserEntity;

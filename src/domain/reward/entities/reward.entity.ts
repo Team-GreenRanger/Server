@@ -20,6 +20,7 @@ export class Reward {
     private readonly _description: string,
     private readonly _type: RewardType,
     private readonly _creditCost: number,
+    private readonly _barcodeImageUrl: string,
     private readonly _validityDays: number = 30, // 쿠폰 유효기간 (일)
     private readonly _originalPrice?: number,
     private readonly _imageUrl?: string,
@@ -38,6 +39,7 @@ export class Reward {
     description: string;
     type: RewardType;
     creditCost: number;
+    barcodeImageUrl: string;
     originalPrice?: number;
     imageUrl?: string;
     partnerName?: string;
@@ -52,6 +54,7 @@ export class Reward {
       props.description,
       props.type,
       props.creditCost,
+      props.barcodeImageUrl,
       props.validityDays || 30,
       props.originalPrice,
       props.imageUrl,
@@ -69,6 +72,7 @@ export class Reward {
     description: string;
     type: RewardType;
     creditCost: number;
+    barcodeImageUrl: string;
     originalPrice?: number;
     imageUrl?: string;
     partnerName?: string;
@@ -87,6 +91,7 @@ export class Reward {
       props.description,
       props.type,
       props.creditCost,
+      props.barcodeImageUrl,
       props.validityDays,
       props.originalPrice,
       props.imageUrl,
@@ -120,6 +125,10 @@ export class Reward {
 
   public get creditCost(): number {
     return this._creditCost;
+  }
+
+  public get barcodeImageUrl(): string {
+    return this._barcodeImageUrl;
   }
 
   public get originalPrice(): number | undefined {
@@ -373,5 +382,9 @@ export class UserReward {
     const now = new Date();
     const diffTime = this._expiresAt.getTime() - now.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  }
+
+  public canRefund(): boolean {
+    return this._status === UserRewardStatus.PURCHASED;
   }
 }
