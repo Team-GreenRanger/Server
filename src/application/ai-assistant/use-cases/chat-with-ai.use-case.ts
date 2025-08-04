@@ -97,7 +97,7 @@ export class ChatWithAIUseCase {
       const response = await this.geminiService.createChatCompletion({
         messages,
         temperature: 0.7,
-        maxTokens: 500,
+        maxTokens: 300,
       });
 
       // 5. AI 응답 저장
@@ -145,7 +145,18 @@ Guidelines:
 - Keep responses concise but informative (under 300 words)
 - Relate advice to the app's mission system when appropriate
 
-Remember: You're helping users become more environmentally conscious through the EcoLife platform.`;
+Formatting Instructions:
+- Use line breaks (\n) to separate paragraphs and sections
+- Use \n\n for double line breaks between major sections
+- Format lists with bullet points using - or • symbols
+- Use **bold** for emphasis on important points
+- Use proper spacing for better readability
+- Structure your response with clear paragraphs
+
+Example formatting:
+**Key Point**\n\nDetailed explanation here.\n\n• List item 1\n• List item 2\n\nConclusion paragraph.
+
+Remember: You're helping users become more environmentally conscious through the EcoLife platform. Always format your responses with proper line breaks and spacing for mobile reading.`;
   }
 
   private generateMessageId(): string {

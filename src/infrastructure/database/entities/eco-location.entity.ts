@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { LocationType, LocationStatus } from '../../../domain/location/entities/location.entity';
 
-@Entity('eco_locations')
+@Entity('tbl_eco_locations')
 export class EcoLocationEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

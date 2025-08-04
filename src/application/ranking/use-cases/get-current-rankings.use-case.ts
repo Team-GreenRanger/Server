@@ -15,7 +15,6 @@ export interface RankingEntry {
   userName: string;
   profileImageUrl?: string;
   score: number;
-  level: number;
   isCurrentUser: boolean;
 }
 
@@ -43,8 +42,7 @@ export class GetCurrentRankingsUseCase {
       userName: ranking.userName,
       profileImageUrl: ranking.profileImageUrl,
       score: ranking.score,
-      level: ranking.level,
-      isCurrentUser: false, // Will be set in controller based on current user
+      isCurrentUser: false,
     }));
 
     const hasNext = offset + limit < result.total;

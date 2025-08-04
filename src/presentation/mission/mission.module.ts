@@ -8,17 +8,21 @@ import { GetMissionsUseCase } from '../../application/mission/use-cases/get-miss
 import { GetMissionByIdUseCase } from '../../application/mission/use-cases/get-mission-by-id.use-case';
 import { GetUserMissionsUseCase } from '../../application/mission/use-cases/get-user-missions.use-case';
 import { GetDailyMissionsUseCase } from '../../application/mission/use-cases/get-daily-missions.use-case';
+import { CreateMissionUseCase } from '../../application/mission/use-cases/create-mission.use-case';
 import { MissionEntity } from '../../infrastructure/database/entities/mission.entity';
 import { UserMissionEntity } from '../../infrastructure/database/entities/user-mission.entity';
+import { UserEntity } from '../../infrastructure/database/entities/user.entity';
 import { CarbonCreditEntity } from '../../infrastructure/database/entities/carbon-credit.entity';
 import { CarbonCreditTransactionEntity } from '../../infrastructure/database/entities/carbon-credit-transaction.entity';
 import { TypeOrmMissionRepository } from '../../infrastructure/database/repositories/typeorm-mission.repository';
 import { TypeOrmUserMissionRepository } from '../../infrastructure/database/repositories/typeorm-user-mission.repository';
+import { TypeOrmUserRepository } from '../../infrastructure/database/repositories/typeorm-user.repository';
 import { TypeOrmCarbonCreditRepository } from '../../infrastructure/database/repositories/typeorm-carbon-credit.repository';
 import { 
   MISSION_REPOSITORY, 
   USER_MISSION_REPOSITORY 
 } from '../../domain/mission/repositories/mission.repository.interface';
+import { USER_REPOSITORY } from '../../domain/user/repositories/user.repository.interface';
 import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositories/carbon-credit.repository.interface';
 
 @Module({
@@ -26,6 +30,7 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
     TypeOrmModule.forFeature([
       MissionEntity,
       UserMissionEntity,
+      UserEntity,
       CarbonCreditEntity,
       CarbonCreditTransactionEntity,
     ])
@@ -39,6 +44,7 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
     GetMissionByIdUseCase,
     GetUserMissionsUseCase,
     GetDailyMissionsUseCase,
+    CreateMissionUseCase,
     {
       provide: MISSION_REPOSITORY,
       useClass: TypeOrmMissionRepository,
@@ -48,6 +54,10 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
       useClass: TypeOrmUserMissionRepository,
     },
     {
+      provide: USER_REPOSITORY,
+      useClass: TypeOrmUserRepository,
+    },
+    {
       provide: CARBON_CREDIT_REPOSITORY,
       useClass: TypeOrmCarbonCreditRepository,
     },
@@ -55,6 +65,7 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
   exports: [
     MISSION_REPOSITORY,
     USER_MISSION_REPOSITORY,
+    USER_REPOSITORY,
     CARBON_CREDIT_REPOSITORY,
   ],
 })

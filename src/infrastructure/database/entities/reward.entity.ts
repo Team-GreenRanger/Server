@@ -9,7 +9,7 @@ import {
 import { UserRewardEntity } from './user-reward.entity';
 import { RewardType, RewardStatus } from '../../../domain/reward/entities/reward.entity';
 
-@Entity('rewards')
+@Entity('tbl_rewards')
 export class RewardEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

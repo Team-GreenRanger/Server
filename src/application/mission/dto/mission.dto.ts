@@ -113,6 +113,12 @@ export class UserMissionResponseDto {
   @ApiProperty({ description: 'Assignment date' })
   assignedAt: Date;
 
+  @ApiProperty({ description: 'Whether mission is active (not completed)' })
+  isActive: boolean;
+
+  @ApiProperty({ description: 'Whether mission is done (completed)' })
+  isDone: boolean;
+
   @ApiPropertyOptional({ description: 'Mission details' })
   mission?: MissionResponseDto;
 }
@@ -152,4 +158,56 @@ export class VerifyMissionDto {
   @IsOptional()
   @IsString()
   verificationNote?: string;
+}
+
+export class CreateMissionDto {
+  @ApiProperty({ description: 'Mission title' })
+  @IsString()
+  title: string;
+
+  @ApiProperty({ description: 'Mission description' })
+  @IsString()
+  description: string;
+
+  @ApiProperty({ enum: MissionTypeDto, description: 'Mission type' })
+  @IsEnum(MissionTypeDto)
+  type: MissionTypeDto;
+
+  @ApiProperty({ enum: DifficultyLevelDto, description: 'Difficulty level' })
+  @IsEnum(DifficultyLevelDto)
+  difficulty: DifficultyLevelDto;
+
+  @ApiProperty({ description: 'CO2 reduction amount in kg' })
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  co2ReductionAmount: number;
+
+  @ApiProperty({ description: 'Credit reward amount' })
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  creditReward: number;
+
+  @ApiPropertyOptional({ description: 'Required number of submissions to complete', minimum: 1 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Type(() => Number)
+  requiredSubmissions?: number;
+
+  @ApiPropertyOptional({ description: 'Mission image URL' })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiProperty({ type: [String], description: 'Mission instructions' })
+  @IsArray()
+  @IsString({ each: true })
+  instructions: string[];
+
+  @ApiProperty({ type: [String], description: 'Verification criteria' })
+  @IsArray()
+  @IsString({ each: true })
+  verificationCriteria: string[];
 }

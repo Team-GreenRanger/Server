@@ -12,7 +12,7 @@ import { CarbonCreditEntity } from './carbon-credit.entity';
 import { UserRewardEntity } from './user-reward.entity';
 import { CarbonCreditTransactionEntity } from './carbon-credit-transaction.entity';
 
-@Entity('users')
+@Entity('tbl_users')
 export class UserEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

@@ -51,6 +51,41 @@ export class TypeOrmUserRepository implements IUserRepository {
     return count > 0;
   }
 
+  async findUsersWithPagination(params: {
+    offset: number;
+    limit: number;
+    search?: string;
+    isActive?: boolean;
+    isAdmin?: boolean;
+  }): Promise<{ users: User[]; total: number }> {
+    const queryBuilder = this.userRepository.createQueryBuilder('user');
+
+    if (params.search) {
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${params.search}%` }
+      );
+    }
+
+    if (params.isActive !== undefined) {
+      queryBuilder.andWhere('user.isActive = :isActive', { isActive: params.isActive });
+    }
+
+    if (params.isAdmin !== undefined) {
+      queryBuilder.andWhere('user.isAdmin = :isAdmin', { isAdmin: params.isAdmin });
+    }
+
+    const [userEntities, total] = await queryBuilder
+      .orderBy('user.createdAt', 'DESC')
+      .skip(params.offset)
+      .take(params.limit)
+      .getManyAndCount();
+
+    const users = userEntities.map(entity => this.toDomain(entity));
+
+    return { users, total };
+  }
+
   async existsByEmail(email: string): Promise<boolean> {
     const count = await this.userRepository.count({ where: { email } });
     return count > 0;

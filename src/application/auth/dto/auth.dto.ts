@@ -47,6 +47,8 @@ export class AuthResponseDto {
     name: string;
     profileImageUrl?: string;
     isVerified: boolean;
+    isActive: boolean;
+    isAdmin: boolean;
     createdAt: Date;
   };
 }

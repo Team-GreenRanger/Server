@@ -153,8 +153,6 @@ export class RankingController {
       limit: 10,
     });
 
-    // For MVP, we'll use the same rankings for weekly, monthly, and all-time
-    // In production, this would query different time periods
     const baseRanking = {
       rankings: carbonRankings.rankings.map(r => ({ ...r, isCurrentUser: r.userId === userId })),
       total: carbonRankings.total,

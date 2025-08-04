@@ -5,7 +5,6 @@ export interface RankingData {
   userName: string;
   profileImageUrl?: string;
   score: number;
-  level: number;
 }
 
 export interface IRankingRepository {

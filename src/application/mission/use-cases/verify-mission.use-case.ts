@@ -12,11 +12,14 @@ export interface VerifyMissionCommand {
   userMissionId: string;
   isApproved: boolean;
   verificationNote?: string;
+  isAutoVerification?: boolean;
 }
 
 export interface VerifyMissionResult {
   userMission: UserMission;
   creditTransaction?: CarbonCreditTransaction;
+  isFullyCompleted: boolean;
+  remainingSubmissions: number;
 }
 
 @Injectable()
@@ -37,6 +40,12 @@ export class VerifyMissionUseCase {
       throw new Error('User mission not found');
     }
 
+    // Get mission details for progress calculation
+    const mission = await this.missionRepository.findById(userMission.missionId);
+    if (!mission) {
+      throw new Error('Mission not found');
+    }
+
     // Validate verification
     if (!userMission.canVerify()) {
       throw new Error('Mission cannot be verified in current status');
@@ -49,16 +58,13 @@ export class VerifyMissionUseCase {
       // 진행률 증가
       userMission.incrementProgress();
       
-      // 완전히 완료되었는지 확인
-      if (userMission.isFullyCompleted()) {
-        // 모든 제출이 완료된 경우에만 크레딧 지급
+      // requiredSubmissions 기반으로 완료 여부 확인
+      const isFullyCompleted = userMission.currentProgress >= mission.requiredSubmissions;
+      const remainingSubmissions = Math.max(0, mission.requiredSubmissions - userMission.currentProgress);
+      
+      if (isFullyCompleted) {
+        // 모든 제출이 완료된 경우에만 크레딧 지급 및 COMPLETED 상태 변경
         userMission.complete();
-        
-        // Get mission details for credit calculation
-        const mission = await this.missionRepository.findById(userMission.missionId);
-        if (!mission) {
-          throw new Error('Mission not found');
-        }
 
         // Award carbon credits
         let carbonCredit = await this.carbonCreditRepository.findByUserId(userMission.userId);
@@ -88,6 +94,8 @@ export class VerifyMissionUseCase {
         return {
           userMission: savedUserMission,
           creditTransaction: savedTransaction,
+          isFullyCompleted: true,
+          remainingSubmissions: 0,
         };
       } else {
         // 아직 더 제출이 필요한 경우 - IN_PROGRESS 상태로 되돌림
@@ -97,15 +105,21 @@ export class VerifyMissionUseCase {
         
         return {
           userMission: savedUserMission,
+          isFullyCompleted: false,
+          remainingSubmissions,
         };
       }
     } else {
-      // Reject mission
+      // Reject mission - 진행률은 증가시키지 않음
       userMission.reject(command.verificationNote || 'Mission verification failed');
       const savedUserMission = await this.userMissionRepository.save(userMission);
+      
+      const remainingSubmissions = Math.max(0, mission.requiredSubmissions - userMission.currentProgress);
 
       return {
         userMission: savedUserMission,
+        isFullyCompleted: false,
+        remainingSubmissions,
       };
     }
   }

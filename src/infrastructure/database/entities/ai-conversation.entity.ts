@@ -11,7 +11,7 @@ import { UserEntity } from './user.entity';
 import { ConversationStatus } from '../../../domain/ai-assistant/entities/conversation.entity';
 import { MessageRole } from '../../../domain/ai-assistant/entities/message.entity';
 
-@Entity('ai_conversations')
+@Entity('tbl_ai_conversations')
 export class AiConversationEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;
@@ -40,7 +40,7 @@ export class AiConversationEntity {
   user: UserEntity;
 }
 
-@Entity('ai_messages')
+@Entity('tbl_ai_messages')
 export class AiMessageEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

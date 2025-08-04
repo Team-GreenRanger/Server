@@ -30,9 +30,6 @@ export class UserRankingDto {
   @ApiProperty({ description: 'Score value (carbon credits, missions, etc.)' })
   score: number;
 
-  @ApiProperty({ description: 'Level' })
-  level: number;
-
   @ApiProperty({ description: 'Whether this is the current user' })
   isCurrentUser: boolean;
 }

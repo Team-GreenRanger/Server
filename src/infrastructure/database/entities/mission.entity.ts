@@ -29,7 +29,7 @@ export enum DifficultyLevelEntity {
   HARD = 'HARD',
 }
 
-@Entity('missions')
+@Entity('tbl_missions')
 export class MissionEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

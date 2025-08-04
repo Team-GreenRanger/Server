@@ -19,7 +19,6 @@ export class RankingEntry {
     private readonly _userName: string,
     private readonly _profileImageUrl?: string,
     private readonly _score: number = 0,
-    private readonly _level: number = 1,
   ) {}
 
   public static create(props: {
@@ -36,7 +35,6 @@ export class RankingEntry {
       props.userName,
       props.profileImageUrl,
       props.score,
-      props.level,
     );
   }
 
@@ -58,10 +56,6 @@ export class RankingEntry {
 
   public get score(): number {
     return this._score;
-  }
-
-  public get level(): number {
-    return this._level;
   }
 }
 

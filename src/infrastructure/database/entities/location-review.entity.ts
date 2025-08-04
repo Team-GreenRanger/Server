@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { EcoLocationEntity } from './eco-location.entity';
 
-@Entity('location_reviews')
+@Entity('tbl_location_reviews')
 export class LocationReviewEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

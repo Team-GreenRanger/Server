@@ -143,9 +143,16 @@ export class UserMission {
   }
 
   public submitEvidence(imageUrls: string[], note?: string): void {
-    if (this._status !== UserMissionStatus.IN_PROGRESS) {
-      throw new Error('Mission must be in progress to submit evidence');
+    // ASSIGNED, IN_PROGRESS, REJECTED 상태에서 제출 가능
+    if (!this.canSubmit()) {
+      throw new Error('Mission cannot be submitted in current state');
     }
+    
+    // ASSIGNED 상태라면 자동으로 IN_PROGRESS로 변경
+    if (this._status === UserMissionStatus.ASSIGNED) {
+      this._status = UserMissionStatus.IN_PROGRESS;
+    }
+    
     this._submissionImageUrls = imageUrls;
     this._submissionNote = note;
     this._status = UserMissionStatus.SUBMITTED;

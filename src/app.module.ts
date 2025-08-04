@@ -14,6 +14,8 @@ import { RewardEntity } from './infrastructure/database/entities/reward.entity';
 import { UserRewardEntity } from './infrastructure/database/entities/user-reward.entity';
 import { AiConversationEntity, AiMessageEntity } from './infrastructure/database/entities/ai-conversation.entity';
 import { UserEntity } from './infrastructure/database/entities/user.entity';
+import { MissionEntity } from './infrastructure/database/entities/mission.entity';
+import { UserMissionEntity } from './infrastructure/database/entities/user-mission.entity';
 
 // Infrastructure Services (moved to SharedServicesModule)
 // Repository implementations
@@ -59,6 +61,7 @@ import { RewardController } from './presentation/reward/controllers/reward.contr
 import { AuthModule } from './presentation/auth/auth.module';
 import { UserModule } from './presentation/user/user.module';
 import { MissionModule } from './presentation/mission/mission.module';
+import { AdminModule } from './presentation/admin/admin.module';
 import { SharedServicesModule } from './shared/modules/shared-services.module';
 
 @Module({
@@ -84,6 +87,8 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
       UserRewardEntity,
       AiConversationEntity,
       AiMessageEntity,
+      MissionEntity,
+      UserMissionEntity,
     ]),
 
     // JWT
@@ -101,13 +106,22 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     // Passport
     PassportModule,
 
-    // Multer for file uploads
+    // Multer for file uploads (Memory Storage)
     MulterModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        dest: configService.get('UPLOAD_PATH', './uploads'),
+        storage: require('multer').memoryStorage(), // 메모리 저장소 사용
         limits: {
           fileSize: 5 * 1024 * 1024, // 5MB
+          files: 10, // 최대 파일 수
+        },
+        fileFilter: (req: any, file: any, cb: any) => {
+          // 이미지 파일만 허용
+          if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+          } else {
+            cb(new Error('Only image files are allowed'), false);
+          }
         },
       }),
     }),
@@ -117,6 +131,7 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     AuthModule,
     UserModule,
     MissionModule,
+    AdminModule,
   ],
   controllers: [
     AIAssistantController,

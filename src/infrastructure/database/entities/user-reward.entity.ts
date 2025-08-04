@@ -11,7 +11,7 @@ import { UserEntity } from './user.entity';
 import { RewardEntity } from './reward.entity';
 import { UserRewardStatus } from '../../../domain/reward/entities/reward.entity';
 
-@Entity('user_rewards')
+@Entity('tbl_user_rewards')
 export class UserRewardEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

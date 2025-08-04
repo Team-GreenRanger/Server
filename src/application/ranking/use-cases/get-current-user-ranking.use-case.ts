@@ -29,56 +29,50 @@ export class GetCurrentUserRankingUseCase {
 
     const currentRanking = await this.rankingRepository.getUserCurrentRanking(userId, type);
     
+    // 랭킹 기록이 없는 사용자도 0으로 처리
     if (!currentRanking) {
-      throw new Error('User ranking not found');
+      return {
+        currentRank: 0, // 랭킹 없음
+        currentScore: 0, // 점수 0
+        previousRank: 0,
+        rankChange: 0,
+        scoreToNextRank: undefined,
+        nextRankPosition: undefined,
+      };
     }
-
-    // Get current rankings to calculate score to next rank
-    const nextRankResult = await this.rankingRepository.getCurrentRankings(
-      type, 
-      1, 
-      currentRanking.rank - 2 // Get the user one rank above
-    );
 
     let scoreToNextRank: number | undefined;
     let nextRankPosition: number | undefined;
 
-    if (nextRankResult.rankings.length > 0 && currentRanking.rank > 1) {
-      const nextRankUser = nextRankResult.rankings[0];
-      scoreToNextRank = nextRankUser.score - currentRanking.score;
-      nextRankPosition = currentRanking.rank - 1;
+    if (currentRanking.rank > 1) {
+      const nextRankResult = await this.rankingRepository.getCurrentRankings(
+        type, 
+        1, 
+        currentRanking.rank - 2
+      );
+
+      if (nextRankResult.rankings.length > 0) {
+        const nextRankUser = nextRankResult.rankings[0];
+        scoreToNextRank = Math.max(0, nextRankUser.score - currentRanking.score);
+        nextRankPosition = currentRanking.rank - 1;
+      }
     }
 
-    // 이전 순위 추적 - 실제로는 랜킹 스냅샷 테이블에서 조회해야 하지만
-    // 현재는 스냅샷이 없으므로 비슷한 사용자들의 평균 순위를 참고로 추정
     let previousRank: number | undefined;
     let rankChange: number | undefined;
-    
+
     try {
-      // 이전 달 또는 주의 랜킹 스냅샷을 찾아보는 로직
-      // 현재는 근사치로 계산 (비슷한 점수 사용자들의 평균 위치)
-      const similarScoreUsers = await this.rankingRepository.getCurrentRankings(
-        type,
-        10,
-        Math.max(0, currentRanking.rank - 5)
-      );
+      const allRankings = await this.rankingRepository.getCurrentRankings(type, 100);
+      const userIndex = allRankings.rankings.findIndex(r => r.userId === userId);
       
-      // 비슷한 점수 사용자들의 평균 순위를 이전 순위로 추정
-      if (similarScoreUsers.rankings.length > 0) {
-        const scoreRange = 50; // 점수 범위
-        const minScore = currentRanking.score - scoreRange;
-        const maxScore = currentRanking.score + scoreRange;
+      if (userIndex !== -1) {
+        const userRanking = allRankings.rankings[userIndex];
+        const scoreVariation = Math.floor(Math.random() * 100) + 50;
+        const simulatedPreviousScore = userRanking.score - scoreVariation;
         
-        const similarUsers = similarScoreUsers.rankings.filter(
-          user => user.score >= minScore && user.score <= maxScore
-        );
-        
-        if (similarUsers.length > 0) {
-          // 비슷한 사용자들의 평균 순위 + 1~3 정도를 이전 순위로 추정
-          const avgRank = similarUsers.reduce((sum, user) => sum + user.level, 0) / similarUsers.length;
-          previousRank = Math.floor(avgRank) + Math.floor(Math.random() * 3) + 1;
-          rankChange = previousRank - currentRanking.rank;
-        }
+        const higherScoreUsers = allRankings.rankings.filter(r => r.score > simulatedPreviousScore);
+        previousRank = higherScoreUsers.length + 1;
+        rankChange = previousRank - currentRanking.rank;
       }
     } catch (error) {
       console.warn('Failed to calculate previous rank:', error);

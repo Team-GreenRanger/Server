@@ -11,7 +11,7 @@ import {
 import { UserEntity } from './user.entity';
 import { CarbonCreditTransactionEntity } from './carbon-credit-transaction.entity';
 
-@Entity('carbon_credits')
+@Entity('tbl_carbon_credits')
 export class CarbonCreditEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

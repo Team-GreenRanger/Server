@@ -38,6 +38,9 @@ export class GeminiService {
   private readonly apiKey: string | undefined;
   private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
   private readonly model = 'gemini-2.5-flash-lite';
+  
+  // Eco tip 캐시를 위한 메모리 저장소
+  private ecoTipCache: { tip: string; date: string } | null = null;
 
   constructor(private configService: ConfigService) {
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -131,21 +134,46 @@ export class GeminiService {
   }
 
   async generateEcoTip(): Promise<string> {
-    const systemPrompt = `You are an environmental expert and sustainability coach. 
-    Generate a practical, actionable eco-friendly tip that users can implement in their daily lives. 
-    The tip should be specific, easy to understand, and include the environmental impact.
-    Keep it under 150 words and make it engaging.`;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    
+    // 캐시된 글이 오늘 날짜와 맞는지 확인
+    if (this.ecoTipCache && this.ecoTipCache.date === today) {
+      this.logger.log('Returning cached eco tip for today');
+      return this.ecoTipCache.tip;
+    }
+    
+    this.logger.log('Generating new eco tip for today');
+    
+    const systemPrompt = `You are an environmental expert. Generate a very short, practical eco-friendly tip.
+    
+    Requirements:
+    - Maximum 100 characters (including spaces)
+    - Simple, actionable advice
+    - Focus on daily habits
+    - Be specific and clear
+    - No extra explanations or context
+    
+    Examples:
+    "Turn off lights when leaving rooms - saves 10% on electricity bills."
+    "Use a reusable water bottle instead of buying plastic ones daily."
+    "Walk or bike for trips under 1 mile to reduce carbon emissions."`;
 
     const response = await this.createChatCompletion({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Generate a daily eco tip for me.' }
+        { role: 'user', content: 'Generate a short daily eco tip (max 100 characters).' }
       ],
       temperature: 0.8,
-      maxTokens: 200,
+      maxTokens: 50, // 짧은 응답을 위해 토큰 수 감소
     });
 
-    return response.message;
+    // 캐시에 저장
+    this.ecoTipCache = {
+      tip: response.message.trim(),
+      date: today
+    };
+    
+    return this.ecoTipCache.tip;
   }
 
   async generateMotivationalMessage(userStats: {

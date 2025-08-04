@@ -19,7 +19,7 @@ export enum UserMissionStatusEntity {
   COMPLETED = 'COMPLETED',
 }
 
-@Entity('user_missions')
+@Entity('tbl_user_missions')
 export class UserMissionEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

@@ -23,7 +23,7 @@ export enum TransactionStatusEntity {
   CANCELLED = 'CANCELLED',
 }
 
-@Entity('carbon_credit_transactions')
+@Entity('tbl_carbon_credit_transactions')
 export class CarbonCreditTransactionEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

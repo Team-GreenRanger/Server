@@ -21,7 +21,7 @@ export enum NotificationTypeEntity {
   SYSTEM_ANNOUNCEMENT = 'SYSTEM_ANNOUNCEMENT',
 }
 
-@Entity('notifications')
+@Entity('tbl_notifications')
 export class NotificationEntity {
   @PrimaryColumn('varchar', { length: 36 })
   id: string;

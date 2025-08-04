@@ -38,6 +38,8 @@ export class AuthController {
           name: result.user.name,
           profileImageUrl: result.user.profileImageUrl,
           isVerified: result.user.isVerified,
+          isActive: result.user.isActive,
+          isAdmin: result.user.isAdmin,
           createdAt: result.user.createdAt,
         },
       };
@@ -73,6 +75,8 @@ export class AuthController {
           name: result.user.name,
           profileImageUrl: result.user.profileImageUrl,
           isVerified: result.user.isVerified,
+          isActive: result.user.isActive,
+          isAdmin: result.user.isAdmin,
           createdAt: result.user.createdAt,
         },
       };

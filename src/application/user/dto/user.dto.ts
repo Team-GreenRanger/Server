@@ -23,6 +23,9 @@ export class UserProfileResponseDto {
   @ApiProperty({ description: 'Email verification status' })
   isVerified: boolean;
 
+  @ApiProperty({ description: 'Admin status' })
+  isAdmin: boolean;
+
   @ApiProperty({ enum: UserStatusDto, description: 'User account status' })
   status: UserStatusDto;
 

@@ -29,20 +29,38 @@ export class FileStorageService {
 
   async uploadFile(file: Express.Multer.File, subDirectory?: string): Promise<FileUploadResult> {
     try {
+      // 파일 정보 로깅
+      this.logger.log(`Uploading file: ${file.originalname}, size: ${file.size}, mimetype: ${file.mimetype}`);
+      
+      if (!file.buffer || file.buffer.length === 0) {
+        throw new Error('File buffer is empty or undefined');
+      }
+
       const fileName = this.generateFileName(file.originalname);
       const directory = subDirectory ? path.join(this.uploadPath, subDirectory) : this.uploadPath;
       
+      this.logger.log(`Target directory: ${directory}`);
+      this.logger.log(`Generated filename: ${fileName}`);
+      
       // Ensure subdirectory exists
       if (!fs.existsSync(directory)) {
+        this.logger.log(`Creating directory: ${directory}`);
         fs.mkdirSync(directory, { recursive: true });
       }
 
       const filePath = path.join(directory, fileName);
+      this.logger.log(`Full file path: ${filePath}`);
       
       // Write file to disk
       fs.writeFileSync(filePath, file.buffer);
+      
+      // 파일이 실제로 생성되었는지 확인
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File was not created at path: ${filePath}`);
+      }
 
       const url = this.buildFileUrl(fileName, subDirectory);
+      this.logger.log(`Generated URL: ${url}`);
 
       this.logger.log(`File uploaded successfully: ${fileName}`);
 
@@ -55,8 +73,16 @@ export class FileStorageService {
         path: filePath,
       };
     } catch (error) {
-      this.logger.error('Error uploading file:', error);
-      throw new Error('Failed to upload file');
+      this.logger.error('Error uploading file:', {
+        originalError: error.message,
+        stack: error.stack,
+        fileName: file?.originalname,
+        fileSize: file?.size,
+        mimetype: file?.mimetype,
+        uploadPath: this.uploadPath,
+        subDirectory
+      });
+      throw new Error(`Failed to upload file: ${error.message}`);
     }
   }
 
