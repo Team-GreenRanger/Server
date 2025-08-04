@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { GeminiService } from '../../../infrastructure/external-apis/gemini/gemini.service';
+import type { IConversationRepository, IMessageRepository } from '../../../domain/ai-assistant/repositories/ai-assistant.repository.interface';
+import { CONVERSATION_REPOSITORY, MESSAGE_REPOSITORY } from '../../../domain/ai-assistant/repositories/ai-assistant.repository.interface';
+import { Conversation, ConversationStatus } from '../../../domain/ai-assistant/entities/conversation.entity';
+import { Message, MessageRole } from '../../../domain/ai-assistant/entities/message.entity';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -9,16 +13,12 @@ export interface ChatMessage {
 export interface ChatWithAICommand {
   userId: string;
   message: string;
-  conversationHistory?: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp?: string;
-  }>;
+  conversationId?: string;
 }
 
 export interface ChatWithAIResult {
   response: string;
-  conversationId?: string;
+  conversationId: string;
   messageId: string;
   timestamp: Date;
 }
@@ -27,10 +27,47 @@ export interface ChatWithAIResult {
 export class ChatWithAIUseCase {
   constructor(
     private readonly geminiService: GeminiService,
+    @Inject(CONVERSATION_REPOSITORY)
+    private readonly conversationRepository: IConversationRepository,
+    @Inject(MESSAGE_REPOSITORY)
+    private readonly messageRepository: IMessageRepository,
   ) {}
 
   async execute(command: ChatWithAICommand): Promise<ChatWithAIResult> {
-    // Build conversation context
+    // 1. 대화 찾기 또는 새로 생성
+    let conversation: Conversation;
+    
+    if (command.conversationId) {
+      const existingConversation = await this.conversationRepository.findById(command.conversationId);
+      if (existingConversation && existingConversation.userId === command.userId) {
+        conversation = existingConversation;
+      } else {
+        throw new Error('Conversation not found or access denied');
+      }
+    } else {
+      // 새 대화 생성
+      conversation = Conversation.create({
+        userId: command.userId,
+        title: this.generateConversationTitle(command.message),
+      });
+      conversation = await this.conversationRepository.save(conversation);
+    }
+
+    // 2. 사용자 메시지 저장
+    const userMessage = Message.create({
+      conversationId: conversation.id,
+      role: MessageRole.USER,
+      content: command.message,
+    });
+    await this.messageRepository.save(userMessage);
+
+    // 3. 이전 메시지들 조회 (컨텍스트)
+    const messageHistory = await this.messageRepository.findByConversationId(
+      conversation.id,
+      20 // 최근 20개 메시지
+    );
+
+    // 4. AI 응답 생성
     const messages: ChatMessage[] = [
       {
         role: 'system',
@@ -38,18 +75,19 @@ export class ChatWithAIUseCase {
       },
     ];
 
-    // Add conversation history if provided
-    if (command.conversationHistory && command.conversationHistory.length > 0) {
-      const recentHistory = command.conversationHistory.slice(-10); // Keep last 10 messages
-      for (const historyMessage of recentHistory) {
-        messages.push({
-          role: historyMessage.role,
-          content: historyMessage.content,
-        });
-      }
+    // 최근 메시지들을 컨텍스트로 추가 (사용자 메시지 제외하고 이전 것들만)
+    const recentMessages = messageHistory.messages
+      .filter(msg => msg.id !== userMessage.id)
+      .slice(-10); // 최근 10개
+      
+    for (const historyMessage of recentMessages) {
+      messages.push({
+        role: historyMessage.role === MessageRole.USER ? 'user' : 'assistant',
+        content: historyMessage.content,
+      });
     }
 
-    // Add current user message
+    // 현재 사용자 메시지 추가
     messages.push({
       role: 'user',
       content: command.message,
@@ -62,14 +100,29 @@ export class ChatWithAIUseCase {
         maxTokens: 500,
       });
 
+      // 5. AI 응답 저장
+      const aiMessage = Message.create({
+        conversationId: conversation.id,
+        role: MessageRole.ASSISTANT,
+        content: response.message,
+      });
+      const savedAiMessage = await this.messageRepository.save(aiMessage);
+
       return {
         response: response.message,
-        messageId: this.generateMessageId(),
-        timestamp: new Date(),
+        conversationId: conversation.id,
+        messageId: savedAiMessage.id,
+        timestamp: savedAiMessage.createdAt,
       };
     } catch (error) {
       throw new Error(`Failed to get AI response: ${error.message}`);
     }
+  }
+
+  private generateConversationTitle(firstMessage: string): string {
+    // 첫 메시지에서 간단한 제목 생성
+    const words = firstMessage.split(' ').slice(0, 4).join(' ');
+    return words.length > 30 ? words.substring(0, 30) + '...' : words;
   }
 
   private getSystemPrompt(): string {

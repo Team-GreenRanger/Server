@@ -73,7 +73,7 @@ export class CarbonCreditController {
     
     // Convert DTO enum to domain enum
     let transactionType: TransactionType | undefined;
-    if (queryDto.type) {
+    if (queryDto.type && Object.values(TransactionType).includes(queryDto.type as unknown as TransactionType)) {
       transactionType = queryDto.type as unknown as TransactionType;
     }
     

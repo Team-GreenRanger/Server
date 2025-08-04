@@ -23,22 +23,19 @@ export class ChatWithAIDto {
   message: string;
 
   @ApiPropertyOptional({ 
-    type: [ChatMessageDto], 
-    description: 'Recent conversation history (optional)' 
+    description: 'Conversation ID (optional for new conversations)' 
   })
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ChatMessageDto)
-  conversationHistory?: ChatMessageDto[];
+  @IsUUID()
+  conversationId?: string;
 }
 
 export class ChatWithAIResponseDto {
   @ApiProperty({ description: 'AI assistant response' })
   response: string;
 
-  @ApiPropertyOptional({ description: 'Conversation ID' })
-  conversationId?: string;
+  @ApiProperty({ description: 'Conversation ID' })
+  conversationId: string;
 
   @ApiProperty({ description: 'Message ID' })
   messageId: string;

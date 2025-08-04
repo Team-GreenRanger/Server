@@ -7,8 +7,10 @@ import {
   UseGuards,
   Request,
   Inject,
-  NotFoundException
+  NotFoundException,
+  BadRequestException
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { 
   ApiTags, 
   ApiOperation, 
@@ -18,14 +20,23 @@ import {
   ApiUnauthorizedResponse
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import type { IUserRepository } from '../../../domain/user/repositories/user.repository.interface';
+import { USER_REPOSITORY } from '../../../domain/user/repositories/user.repository.interface';
+import type { IMissionRepository, IUserMissionRepository } from '../../../domain/mission/repositories/mission.repository.interface';
+import { MISSION_REPOSITORY, USER_MISSION_REPOSITORY } from '../../../domain/mission/repositories/mission.repository.interface';
+import type { ICarbonCreditRepository } from '../../../domain/carbon-credit/repositories/carbon-credit.repository.interface';
+import { CARBON_CREDIT_REPOSITORY } from '../../../domain/carbon-credit/repositories/carbon-credit.repository.interface';
+import type { IRankingRepository } from '../../../domain/ranking/repositories/ranking.repository.interface';
+import { RANKING_REPOSITORY } from '../../../domain/ranking/repositories/ranking.repository.interface';
+import { RankingType } from '../../../domain/ranking/entities/ranking-snapshot.entity';
 import { 
   UserProfileResponseDto,
   UpdateUserProfileDto,
   ChangePasswordDto,
   DeactivateAccountDto,
-  UserStatisticsResponseDto
+  UserStatisticsResponseDto,
+  UserStatusDto
 } from '../../../application/user/dto/user.dto';
-import { IUserRepository, USER_REPOSITORY } from '../../../domain/user/repositories/user.repository.interface';
 
 @ApiTags('Users')
 @Controller('users')
@@ -35,6 +46,14 @@ export class UserController {
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: IUserRepository,
+    @Inject(MISSION_REPOSITORY)
+    private readonly missionRepository: IMissionRepository,
+    @Inject(USER_MISSION_REPOSITORY)
+    private readonly userMissionRepository: IUserMissionRepository,
+    @Inject(CARBON_CREDIT_REPOSITORY)
+    private readonly carbonCreditRepository: ICarbonCreditRepository,
+    @Inject(RANKING_REPOSITORY)
+    private readonly rankingRepository: IRankingRepository,
   ) {}
 
   @Get('profile')
@@ -58,7 +77,7 @@ export class UserController {
       name: user.name,
       profileImageUrl: user.profileImageUrl,
       isVerified: user.isVerified,
-      status: user.isActive ? 'ACTIVE' : 'INACTIVE',
+      status: user.isActive ? UserStatusDto.ACTIVE : UserStatusDto.INACTIVE,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -96,7 +115,7 @@ export class UserController {
       name: updatedUser.name,
       profileImageUrl: updatedUser.profileImageUrl,
       isVerified: updatedUser.isVerified,
-      status: updatedUser.isActive ? 'ACTIVE' : 'INACTIVE',
+      status: updatedUser.isActive ? UserStatusDto.ACTIVE : UserStatusDto.INACTIVE,
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
     };
@@ -118,7 +137,23 @@ export class UserController {
       throw new NotFoundException('User not found');
     }
     
-    // TODO: 실제 비밀번호 검증 및 해싱 로직 구현
+    // 현재 비밀번호 검증
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword, 
+      user.hashedPassword
+    );
+    
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+    
+    // 새 비밀번호 해싱
+    const saltRounds = 12;
+    const hashedNewPassword = await bcrypt.hash(changePasswordDto.newPassword, saltRounds);
+    
+    // 비밀번호 변경
+    user.changePassword(hashedNewPassword);
+    await this.userRepository.save(user);
     
     return { message: 'Password changed successfully' };
   }
@@ -138,6 +173,18 @@ export class UserController {
       throw new NotFoundException('User not found');
     }
 
+    // 비밀번호 확인
+    if (deactivateDto.password) {
+      const isPasswordValid = await bcrypt.compare(
+        deactivateDto.password, 
+        user.hashedPassword
+      );
+      
+      if (!isPasswordValid) {
+        throw new BadRequestException('Invalid password');
+      }
+    }
+
     user.deactivate();
     await this.userRepository.save(user);
     
@@ -154,21 +201,41 @@ export class UserController {
   async getStatistics(@Request() req: any): Promise<UserStatisticsResponseDto> {
     const userId = req.user.sub;
     
-    const user = await this.userRepository.findById(userId);
+    // 병렬로 모든 데이터 조회
+    const [user, totalMissionsCompleted, completedUserMissions, carbonCredit, rankingResult] = await Promise.all([
+      this.userRepository.findById(userId),
+      this.userMissionRepository.countCompletedMissions(userId),
+      this.userMissionRepository.findCompletedMissionsByUserId(userId),
+      this.carbonCreditRepository.findByUserId(userId),
+      this.rankingRepository.getUserCurrentRanking(userId, RankingType.MISSIONS_COMPLETED).catch(() => null)
+    ]);
+    
     if (!user) {
       throw new NotFoundException('User not found');
     }
     
-    // TODO: 실제 통계 데이터 계산 로직 구현
+    // 완료된 미션들의 CO2 감소량을 병렬로 계산
+    const missionPromises = completedUserMissions.map(userMission => 
+      this.missionRepository.findById(userMission.missionId)
+    );
+    const missions = await Promise.all(missionPromises);
+    
+    const totalCo2Reduction = missions.reduce((total, mission) => {
+      return total + (mission ? mission.co2ReductionAmount : 0);
+    }, 0);
+    
+    const currentCarbonCredits = carbonCredit ? carbonCredit.balance : 0;
+    const currentLevel = 0;
     const daysSinceJoined = Math.floor((new Date().getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+    const globalRanking = rankingResult ? rankingResult.rank : 1;
     
     return {
-      totalMissionsCompleted: 15,
-      currentCarbonCredits: 4400,
-      totalCo2Reduction: 125.5,
-      currentLevel: 3,
+      totalMissionsCompleted,
+      currentCarbonCredits,
+      totalCo2Reduction,
+      currentLevel,
       daysSinceJoined,
-      globalRanking: 1,
+      globalRanking,
     };
   }
 }

@@ -30,6 +30,7 @@ export class Mission {
     private readonly _difficulty: DifficultyLevel,
     private readonly _co2ReductionAmount: number, // kg CO2 reduced
     private readonly _creditReward: number,
+    private readonly _requiredSubmissions: number = 1, // 관리자가 설정하는 제출 횟수
     private readonly _imageUrl?: string,
     private readonly _instructions: string[] = [],
     private readonly _verificationCriteria: string[] = [],
@@ -45,6 +46,7 @@ export class Mission {
     difficulty: DifficultyLevel;
     co2ReductionAmount: number;
     creditReward: number;
+    requiredSubmissions?: number;
     imageUrl?: string;
     instructions?: string[];
     verificationCriteria?: string[];
@@ -57,6 +59,7 @@ export class Mission {
       props.difficulty,
       props.co2ReductionAmount,
       props.creditReward,
+      props.requiredSubmissions || 1,
       props.imageUrl,
       props.instructions || [],
       props.verificationCriteria || [],
@@ -71,6 +74,7 @@ export class Mission {
     difficulty: DifficultyLevel;
     co2ReductionAmount: number;
     creditReward: number;
+    requiredSubmissions: number;
     imageUrl?: string;
     instructions: string[];
     verificationCriteria: string[];
@@ -86,6 +90,7 @@ export class Mission {
       props.difficulty,
       props.co2ReductionAmount,
       props.creditReward,
+      props.requiredSubmissions,
       props.imageUrl,
       props.instructions,
       props.verificationCriteria,
@@ -122,6 +127,10 @@ export class Mission {
 
   public get creditReward(): number {
     return this._creditReward;
+  }
+
+  public get requiredSubmissions(): number {
+    return this._requiredSubmissions;
   }
 
   public get imageUrl(): string | undefined {

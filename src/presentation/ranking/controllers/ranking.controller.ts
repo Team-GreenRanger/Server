@@ -17,7 +17,9 @@ import {
   RankingListResponseDto,
   RankingStatsResponseDto,
   LeaderboardResponseDto,
-  CurrentUserRankingDto
+  CurrentUserRankingDto,
+  RankingTypeDto,
+  RankingPeriodDto
 } from '../../../application/ranking/dto/ranking.dto';
 import { GetCurrentRankingsUseCase } from '../../../application/ranking/use-cases/get-current-rankings.use-case';
 import { GetCurrentUserRankingUseCase } from '../../../application/ranking/use-cases/get-current-user-ranking.use-case';
@@ -41,7 +43,9 @@ export class RankingController {
     type: RankingListResponseDto 
   })
   async getRankings(@Query() queryDto: RankingListQueryDto): Promise<RankingListResponseDto> {
-    const type = queryDto.type ? (queryDto.type as unknown as RankingType) : RankingType.CARBON_CREDITS;
+    const type = (queryDto.type && Object.values(RankingType).includes(queryDto.type as unknown as RankingType)) 
+      ? queryDto.type as unknown as RankingType 
+      : RankingType.CARBON_CREDITS;
     
     const result = await this.getCurrentRankingsUseCase.execute({
       type,
@@ -52,8 +56,8 @@ export class RankingController {
     return {
       rankings: result.rankings,
       total: result.total,
-      type: type as any,
-      period: queryDto.period || 'ALL_TIME' as any,
+      type: type as unknown as RankingTypeDto,
+      period: queryDto.period || 'ALL_TIME' as RankingPeriodDto,
       hasNext: result.hasNext,
     };
   }

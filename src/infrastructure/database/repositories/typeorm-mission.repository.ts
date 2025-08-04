@@ -82,6 +82,7 @@ export class TypeOrmMissionRepository implements IMissionRepository {
     entity.difficulty = mission.difficulty as unknown as DifficultyLevelEntity;
     entity.co2ReductionAmount = mission.co2ReductionAmount;
     entity.creditReward = mission.creditReward;
+    entity.requiredSubmissions = mission.requiredSubmissions;
     entity.imageUrl = mission.imageUrl;
     entity.instructions = mission.instructions;
     entity.verificationCriteria = mission.verificationCriteria;
@@ -100,6 +101,7 @@ export class TypeOrmMissionRepository implements IMissionRepository {
       difficulty: entity.difficulty as unknown as DifficultyLevel,
       co2ReductionAmount: entity.co2ReductionAmount,
       creditReward: entity.creditReward,
+      requiredSubmissions: entity.requiredSubmissions,
       imageUrl: entity.imageUrl,
       instructions: entity.instructions || [],
       verificationCriteria: entity.verificationCriteria || [],

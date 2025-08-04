@@ -58,6 +58,9 @@ export class MissionEntity {
   @Column('int')
   creditReward: number;
 
+  @Column('int', { default: 1 })
+  requiredSubmissions: number;
+
   @Column('varchar', { length: 500, nullable: true })
   imageUrl?: string;
 

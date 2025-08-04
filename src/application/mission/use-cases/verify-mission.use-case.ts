@@ -45,43 +45,60 @@ export class VerifyMissionUseCase {
     if (command.isApproved) {
       // Approve mission
       userMission.verify(command.verificationNote);
-      userMission.complete();
+      
+      // 진행률 증가
+      userMission.incrementProgress();
+      
+      // 완전히 완료되었는지 확인
+      if (userMission.isFullyCompleted()) {
+        // 모든 제출이 완료된 경우에만 크레딧 지급
+        userMission.complete();
+        
+        // Get mission details for credit calculation
+        const mission = await this.missionRepository.findById(userMission.missionId);
+        if (!mission) {
+          throw new Error('Mission not found');
+        }
 
-      // Get mission details for credit calculation
-      const mission = await this.missionRepository.findById(userMission.missionId);
-      if (!mission) {
-        throw new Error('Mission not found');
+        // Award carbon credits
+        let carbonCredit = await this.carbonCreditRepository.findByUserId(userMission.userId);
+        if (!carbonCredit) {
+          carbonCredit = CarbonCredit.create(userMission.userId);
+        }
+
+        // Create transaction
+        const transaction = CarbonCreditTransaction.create({
+          userId: userMission.userId,
+          type: TransactionType.EARNED,
+          amount: mission.creditReward,
+          description: `Mission completed: ${mission.title}`,
+          sourceType: 'MISSION',
+          sourceId: mission.id,
+        });
+
+        // Award credits
+        carbonCredit.earn(mission.creditReward);
+        transaction.complete();
+
+        // Save updates
+        await this.carbonCreditRepository.save(carbonCredit);
+        const savedTransaction = await this.carbonCreditRepository.saveTransaction(transaction);
+        const savedUserMission = await this.userMissionRepository.save(userMission);
+
+        return {
+          userMission: savedUserMission,
+          creditTransaction: savedTransaction,
+        };
+      } else {
+        // 아직 더 제출이 필요한 경우 - IN_PROGRESS 상태로 되돌림
+        userMission.continueProgress();
+        
+        const savedUserMission = await this.userMissionRepository.save(userMission);
+        
+        return {
+          userMission: savedUserMission,
+        };
       }
-
-      // Award carbon credits
-      let carbonCredit = await this.carbonCreditRepository.findByUserId(userMission.userId);
-      if (!carbonCredit) {
-        carbonCredit = CarbonCredit.create(userMission.userId);
-      }
-
-      // Create transaction
-      const transaction = CarbonCreditTransaction.create({
-        userId: userMission.userId,
-        type: TransactionType.EARNED,
-        amount: mission.creditReward,
-        description: `Mission completed: ${mission.title}`,
-        sourceType: 'MISSION',
-        sourceId: mission.id,
-      });
-
-      // Award credits
-      carbonCredit.earn(mission.creditReward);
-      transaction.complete();
-
-      // Save updates
-      await this.carbonCreditRepository.save(carbonCredit);
-      const savedTransaction = await this.carbonCreditRepository.saveTransaction(transaction);
-      const savedUserMission = await this.userMissionRepository.save(userMission);
-
-      return {
-        userMission: savedUserMission,
-        creditTransaction: savedTransaction,
-      };
     } else {
       // Reject mission
       userMission.reject(command.verificationNote || 'Mission verification failed');

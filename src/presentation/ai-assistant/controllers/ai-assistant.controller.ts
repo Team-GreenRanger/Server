@@ -4,8 +4,14 @@ import {
   Get, 
   Body, 
   UseGuards,
-  Request
+  Request,
+  Param,
+  Query,
+  NotFoundException,
+  Inject
 } from '@nestjs/common';
+import type { IConversationRepository, IMessageRepository } from '../../../domain/ai-assistant/repositories/ai-assistant.repository.interface';
+import { CONVERSATION_REPOSITORY, MESSAGE_REPOSITORY } from '../../../domain/ai-assistant/repositories/ai-assistant.repository.interface';
 import { 
   ApiTags, 
   ApiOperation, 
@@ -31,8 +37,6 @@ import {
 
 @ApiTags('AI Assistant')
 @Controller('ai')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class AIAssistantController {
   constructor(
     private readonly chatWithAIUseCase: ChatWithAIUseCase,
@@ -40,9 +44,15 @@ export class AIAssistantController {
     private readonly getConversationsUseCase: GetConversationsUseCase,
     private readonly geminiService: GeminiService,
     private readonly claudeService: ClaudeService,
+    @Inject(CONVERSATION_REPOSITORY)
+    private readonly conversationRepository: IConversationRepository,
+    @Inject(MESSAGE_REPOSITORY)
+    private readonly messageRepository: IMessageRepository,
   ) {}
 
   @Post('chat')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Chat with AI assistant' })
   @ApiResponse({ 
     status: 200, 
@@ -58,7 +68,7 @@ export class AIAssistantController {
     const result = await this.chatWithAIUseCase.execute({
       userId,
       message: chatDto.message,
-      conversationHistory: chatDto.conversationHistory,
+      conversationId: chatDto.conversationId,
     });
 
     return {
@@ -70,6 +80,8 @@ export class AIAssistantController {
   }
 
   @Post('verify-image')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Verify mission image with AI' })
   @ApiResponse({ 
     status: 200, 
@@ -117,6 +129,8 @@ export class AIAssistantController {
   }
 
   @Get('conversations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user conversation history' })
   @ApiResponse({ 
     status: 200, 
@@ -131,6 +145,46 @@ export class AIAssistantController {
     return {
       conversations: result.conversations,
       total: result.total,
+    };
+  }
+
+  @Get('conversations/:conversationId/messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get messages in a conversation' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Conversation messages' 
+  })
+  async getConversationMessages(
+    @Request() req: any,
+    @Param('conversationId') conversationId: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    const userId = req.user.sub;
+    
+    // 사용자 권한 확인
+    const conversation = await this.conversationRepository.findById(conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new NotFoundException('Conversation not found');
+    }
+    
+    const result = await this.messageRepository.findByConversationId(
+      conversationId,
+      limit || 50,
+      offset || 0
+    );
+    
+    return {
+      messages: result.messages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: msg.createdAt,
+      })),
+      total: result.total,
+      hasNext: (offset || 0) + (limit || 50) < result.total,
     };
   }
 

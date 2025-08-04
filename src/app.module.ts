@@ -12,22 +12,21 @@ import { CarbonCreditEntity } from './infrastructure/database/entities/carbon-cr
 import { CarbonCreditTransactionEntity } from './infrastructure/database/entities/carbon-credit-transaction.entity';
 import { RewardEntity } from './infrastructure/database/entities/reward.entity';
 import { UserRewardEntity } from './infrastructure/database/entities/user-reward.entity';
+import { AiConversationEntity, AiMessageEntity } from './infrastructure/database/entities/ai-conversation.entity';
 import { UserEntity } from './infrastructure/database/entities/user.entity';
-import { EcoLocationEntity } from './infrastructure/database/entities/eco-location.entity';
-import { LocationReviewEntity } from './infrastructure/database/entities/location-review.entity';
 
 // Infrastructure Services (moved to SharedServicesModule)
 // Repository implementations
 import { TypeOrmCarbonCreditRepository } from './infrastructure/database/repositories/typeorm-carbon-credit.repository';
 import { TypeOrmRewardRepository, TypeOrmUserRewardRepository } from './infrastructure/database/repositories/typeorm-reward.repository';
+import { TypeOrmConversationRepository } from './infrastructure/database/repositories/typeorm-conversation.repository';
+import { TypeOrmMessageRepository } from './infrastructure/database/repositories/typeorm-message.repository';
 import { TypeOrmUserRepository } from './infrastructure/database/repositories/typeorm-user.repository';
-import { TypeOrmLocationReviewRepository } from './infrastructure/database/repositories/typeorm-location-review.repository';
-import { TypeOrmLocationRepository } from './infrastructure/database/repositories/typeorm-location.repository';
 import { TypeOrmRankingRepository } from './infrastructure/database/repositories/typeorm-ranking.repository';
 import { CARBON_CREDIT_REPOSITORY } from './domain/carbon-credit/repositories/carbon-credit.repository.interface';
 import { REWARD_REPOSITORY, USER_REWARD_REPOSITORY } from './domain/reward/repositories/reward.repository.interface';
+import { CONVERSATION_REPOSITORY, MESSAGE_REPOSITORY } from './domain/ai-assistant/repositories/ai-assistant.repository.interface';
 import { USER_REPOSITORY } from './domain/user/repositories/user.repository.interface';
-import { LOCATION_REPOSITORY, LOCATION_REVIEW_REPOSITORY } from './domain/location/repositories/location.repository.interface';
 import { RANKING_REPOSITORY } from './domain/ranking/repositories/ranking.repository.interface';
 
 // Application Use Cases
@@ -47,22 +46,14 @@ import { GetUserRewardByIdUseCase } from './application/reward/use-cases/get-use
 import { CreateRewardUseCase } from './application/reward/use-cases/create-reward.use-case';
 import { UpdateRewardUseCase } from './application/reward/use-cases/update-reward.use-case';
 import { DeleteRewardUseCase } from './application/reward/use-cases/delete-reward.use-case';
-import { SearchLocationsUseCase } from './application/location/use-cases/search-locations.use-case';
-import { GetNearbyLocationsUseCase } from './application/location/use-cases/get-nearby-locations.use-case';
-import { GetLocationByIdUseCase } from './application/location/use-cases/get-location-by-id.use-case';
-import { GetLocationReviewsUseCase } from './application/location/use-cases/get-location-reviews.use-case';
-import { CreateLocationReviewUseCase } from './application/location/use-cases/create-location-review.use-case';
-import { GetLocationTypeStatsUseCase } from './application/location/use-cases/get-location-type-stats.use-case';
 
 // Presentation Controllers
 import { AIAssistantController } from './presentation/ai-assistant/controllers/ai-assistant.controller';
 import { CarbonCreditController } from './presentation/carbon-credit/controllers/carbon-credit.controller';
 import { UploadController } from './presentation/upload/upload.controller';
 import { UserController } from './presentation/user/controllers/user.controller';
-import { NotificationController } from './presentation/notification/controllers/notification.controller';
 import { RankingController } from './presentation/ranking/controllers/ranking.controller';
 import { RewardController } from './presentation/reward/controllers/reward.controller';
-import { LocationController } from './presentation/location/controllers/location.controller';
 
 // Modules
 import { AuthModule } from './presentation/auth/auth.module';
@@ -91,8 +82,8 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
       CarbonCreditTransactionEntity,
       RewardEntity,
       UserRewardEntity,
-      EcoLocationEntity,
-      LocationReviewEntity,
+      AiConversationEntity,
+      AiMessageEntity,
     ]),
 
     // JWT
@@ -132,16 +123,22 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     CarbonCreditController,
     UploadController,
     UserController,
-    NotificationController,
     RankingController,
     RewardController,
-    LocationController,
   ],
   providers: [
     // Repository implementations
     {
       provide: USER_REPOSITORY,
       useClass: TypeOrmUserRepository,
+    },
+    {
+      provide: CONVERSATION_REPOSITORY,
+      useClass: TypeOrmConversationRepository,
+    },
+    {
+      provide: MESSAGE_REPOSITORY,
+      useClass: TypeOrmMessageRepository,
     },
     {
       provide: CARBON_CREDIT_REPOSITORY,
@@ -154,14 +151,6 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     {
       provide: USER_REWARD_REPOSITORY,
       useClass: TypeOrmUserRewardRepository,
-    },
-    {
-      provide: LOCATION_REPOSITORY,
-      useClass: TypeOrmLocationRepository,
-    },
-    {
-      provide: LOCATION_REVIEW_REPOSITORY,
-      useClass: TypeOrmLocationReviewRepository,
     },
     {
       provide: RANKING_REPOSITORY,
@@ -185,12 +174,6 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     CreateRewardUseCase,
     UpdateRewardUseCase,
     DeleteRewardUseCase,
-    SearchLocationsUseCase,
-    GetNearbyLocationsUseCase,
-    GetLocationByIdUseCase,
-    GetLocationReviewsUseCase,
-    CreateLocationReviewUseCase,
-    GetLocationTypeStatsUseCase,
   ],
 })
 export class AppModule {}

@@ -9,6 +9,7 @@ export class User {
     private _profileImageUrl?: string,
     private _isVerified: boolean = false,
     private _isActive: boolean = true,
+    private _isAdmin: boolean = false,
     private readonly _createdAt: Date = new Date(),
     private _updatedAt: Date = new Date(),
   ) {}
@@ -18,6 +19,7 @@ export class User {
     name: string;
     hashedPassword: string;
     profileImageUrl?: string;
+    isAdmin?: boolean;
   }): User {
     return new User(
       uuidv4(),
@@ -25,6 +27,9 @@ export class User {
       props.name,
       props.hashedPassword,
       props.profileImageUrl,
+      false, // isVerified
+      true, // isActive
+      props.isAdmin || false, // isAdmin
     );
   }
 
@@ -36,6 +41,7 @@ export class User {
     profileImageUrl?: string;
     isVerified: boolean;
     isActive: boolean;
+    isAdmin: boolean;
     createdAt: Date;
     updatedAt: Date;
   }): User {
@@ -47,6 +53,7 @@ export class User {
       props.profileImageUrl,
       props.isVerified,
       props.isActive,
+      props.isAdmin,
       props.createdAt,
       props.updatedAt,
     );
@@ -81,6 +88,10 @@ export class User {
     return this._isActive;
   }
 
+  public get isAdmin(): boolean {
+    return this._isAdmin;
+  }
+
   public get createdAt(): Date {
     return this._createdAt;
   }
@@ -113,6 +124,11 @@ export class User {
 
   public changePassword(newHashedPassword: string): void {
     this._hashedPassword = newHashedPassword;
+    this._updatedAt = new Date();
+  }
+
+  public setAdminRole(isAdmin: boolean): void {
+    this._isAdmin = isAdmin;
     this._updatedAt = new Date();
   }
 }

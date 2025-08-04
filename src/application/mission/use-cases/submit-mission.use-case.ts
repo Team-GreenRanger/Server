@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { UserMission } from '../../../domain/mission/entities/user-mission.entity';
+import { UserMission, UserMissionStatus } from '../../../domain/mission/entities/user-mission.entity';
 import type { IUserMissionRepository } from '../../../domain/mission/repositories/mission.repository.interface';
 import { USER_MISSION_REPOSITORY } from '../../../domain/mission/repositories/mission.repository.interface';
 
@@ -33,6 +33,11 @@ export class SubmitMissionUseCase {
     }
 
     // Submit evidence
+    if (userMission.status === UserMissionStatus.ASSIGNED) {
+      // 처음 제출이면 IN_PROGRESS로 상태 변경
+      userMission.startProgress();
+    }
+    
     userMission.submitEvidence(command.imageUrls, command.note);
 
     // Save updated user mission

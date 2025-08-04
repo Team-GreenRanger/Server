@@ -42,7 +42,7 @@ export class LoginUseCase {
     }
 
     // Generate JWT token
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, isAdmin: user.isAdmin };
     const accessToken = this.jwtService.sign(payload);
 
     return {

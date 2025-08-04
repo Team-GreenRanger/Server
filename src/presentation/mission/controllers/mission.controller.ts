@@ -18,6 +18,8 @@ import {
   ApiQuery 
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../../auth/guards/admin.guard';
+import { Admin } from '../../auth/decorators/admin.decorator';
 import { AssignMissionUseCase } from '../../../application/mission/use-cases/assign-mission.use-case';
 import { SubmitMissionUseCase } from '../../../application/mission/use-cases/submit-mission.use-case';
 import { VerifyMissionUseCase } from '../../../application/mission/use-cases/verify-mission.use-case';
@@ -34,8 +36,11 @@ import {
   SubmitMissionDto,
   VerifyMissionDto,
   MissionStatusDto,
-  UserMissionStatusDto
+  UserMissionStatusDto,
+  MissionTypeDto,
+  DifficultyLevelDto
 } from '../../../application/mission/dto/mission.dto';
+import { MissionStatus } from '../../../domain/mission/entities/mission.entity';
 
 @ApiTags('Missions')
 @Controller('missions')
@@ -68,7 +73,7 @@ export class MissionController {
     @Query('type') type?: string,
   ): Promise<MissionResponseDto[]> {
     const result = await this.getMissionsUseCase.execute({
-      status: status as any,
+      status: status as unknown as MissionStatus,
       type,
     });
 
@@ -76,14 +81,15 @@ export class MissionController {
       id: mission.id,
       title: mission.title,
       description: mission.description,
-      type: mission.type as any,
-      difficulty: mission.difficulty as any,
+      type: mission.type as unknown as MissionTypeDto,
+      difficulty: mission.difficulty as unknown as DifficultyLevelDto,
       co2ReductionAmount: mission.co2ReductionAmount,
       creditReward: mission.creditReward,
+      requiredSubmissions: mission.requiredSubmissions,
       imageUrl: mission.imageUrl,
       instructions: mission.instructions,
       verificationCriteria: mission.verificationCriteria,
-      status: mission.status as any,
+      status: mission.status as unknown as MissionStatusDto,
       createdAt: mission.createdAt,
     }));
   }
@@ -104,14 +110,15 @@ export class MissionController {
       id: mission.id,
       title: mission.title,
       description: mission.description,
-      type: mission.type as any,
-      difficulty: mission.difficulty as any,
+      type: mission.type as unknown as MissionTypeDto,
+      difficulty: mission.difficulty as unknown as DifficultyLevelDto,
       co2ReductionAmount: mission.co2ReductionAmount,
       creditReward: mission.creditReward,
+      requiredSubmissions: mission.requiredSubmissions,
       imageUrl: mission.imageUrl,
       instructions: mission.instructions,
       verificationCriteria: mission.verificationCriteria,
-      status: mission.status as any,
+      status: mission.status as unknown as MissionStatusDto,
       createdAt: mission.createdAt,
     };
   }
@@ -168,7 +175,7 @@ export class MissionController {
       id: userMission.id,
       userId: userMission.userId,
       missionId: userMission.missionId,
-      status: userMission.status as any,
+      status: userMission.status as unknown as UserMissionStatusDto,
       currentProgress: userMission.currentProgress,
       targetProgress: userMission.targetProgress,
       submissionImageUrls: userMission.submissionImageUrls,
@@ -204,7 +211,7 @@ export class MissionController {
       id: userMission.id,
       userId: userMission.userId,
       missionId: userMission.missionId,
-      status: userMission.status as any,
+      status: userMission.status as unknown as UserMissionStatusDto,
       currentProgress: userMission.currentProgress,
       targetProgress: userMission.targetProgress,
       submissionImageUrls: userMission.submissionImageUrls,
@@ -255,8 +262,8 @@ export class MissionController {
       });
 
       // Send notification based on result
-      if (verificationResult.isValid) {
-        // Get mission details for notification
+      if (verificationResult.isValid && verifyResult.creditTransaction) {
+        // 완전히 완료된 경우에만 알림 전송
         const missionResult = await this.getMissionByIdUseCase.execute({ 
           id: userMission.missionId 
         });
@@ -306,6 +313,8 @@ export class MissionController {
   }
 
   @Patch('user-missions/:id/verify')
+  @Admin()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Verify submitted mission (Admin only)' })
   @ApiParam({ name: 'id', description: 'User Mission ID' })
   @ApiResponse({ 

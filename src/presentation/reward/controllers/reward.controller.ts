@@ -20,6 +20,8 @@ import {
   ApiNotFoundResponse
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../../auth/guards/admin.guard';
+import { Admin } from '../../auth/decorators/admin.decorator';
 import { 
   RewardResponseDto,
   RewardListQueryDto,
@@ -29,7 +31,10 @@ import {
   UserRewardListQueryDto,
   UserRewardListResponseDto,
   CreateRewardDto,
-  UpdateRewardDto
+  UpdateRewardDto,
+  RewardTypeDto,
+  RewardStatusDto,
+  UserRewardStatusDto
 } from '../../../application/reward/dto/reward.dto';
 import { GetRewardsUseCase } from '../../../application/reward/use-cases/get-rewards.use-case';
 import { GetRewardByIdUseCase } from '../../../application/reward/use-cases/get-reward-by-id.use-case';
@@ -39,6 +44,7 @@ import { GetUserRewardByIdUseCase } from '../../../application/reward/use-cases/
 import { CreateRewardUseCase } from '../../../application/reward/use-cases/create-reward.use-case';
 import { UpdateRewardUseCase } from '../../../application/reward/use-cases/update-reward.use-case';
 import { DeleteRewardUseCase } from '../../../application/reward/use-cases/delete-reward.use-case';
+import { RewardType, RewardStatus, UserRewardStatus } from '../../../domain/reward/entities/reward.entity';
 
 @ApiTags('Rewards')
 @Controller('rewards')
@@ -74,11 +80,11 @@ export class RewardController {
         id: reward.id,
         name: reward.title,
         description: reward.description,
-        type: reward.type as any,
+        type: this.mapRewardTypeToDto(reward.type),
         cost: reward.creditCost,
         imageUrl: reward.imageUrl,
         availableQuantity: reward.remainingQuantity || 0,
-        status: reward.status as any,
+        status: this.mapRewardStatusToDto(reward.status),
         createdAt: reward.createdAt,
       })),
       total: result.total,
@@ -103,11 +109,11 @@ export class RewardController {
       id: reward.id,
       name: reward.title,
       description: reward.description,
-      type: reward.type as any,
+      type: this.mapRewardTypeToDto(reward.type),
       cost: reward.creditCost,
       imageUrl: reward.imageUrl,
       availableQuantity: reward.remainingQuantity || 0,
-      status: reward.status as any,
+      status: this.mapRewardStatusToDto(reward.status),
       createdAt: reward.createdAt,
     };
   }
@@ -133,13 +139,15 @@ export class RewardController {
     });
 
     const userReward = result.userReward;
+    // Get reward details for creditCost
+    const rewardResult = await this.getRewardByIdUseCase.execute({ id: redeemDto.rewardId });
 
     return {
       id: userReward.id,
       userId: userReward.userId,
       rewardId: userReward.rewardId,
-      creditCost: 0, // Will be filled from transaction
-      status: userReward.status as any,
+      creditCost: rewardResult.reward.creditCost,
+      status: userReward.status as unknown as UserRewardStatusDto,
       redemptionCode: userReward.couponCode || '',
       deliveryAddress: redeemDto.deliveryAddress,
       redeemedAt: userReward.purchasedAt,
@@ -172,7 +180,7 @@ export class RewardController {
         userId: item.userReward.userId,
         rewardId: item.userReward.rewardId,
         creditCost: item.reward.creditCost,
-        status: item.userReward.status as any,
+        status: this.mapUserRewardStatusToDto(item.userReward.status),
         redemptionCode: item.userReward.couponCode || '',
         redeemedAt: item.userReward.purchasedAt,
         expiresAt: item.userReward.expiresAt,
@@ -218,7 +226,7 @@ export class RewardController {
       userId: result.userReward.userId,
       rewardId: result.userReward.rewardId,
       creditCost: result.reward.creditCost,
-      status: result.userReward.status as any,
+      status: this.mapUserRewardStatusToDto(result.userReward.status),
       redemptionCode: result.userReward.couponCode || '',
       redeemedAt: result.userReward.purchasedAt,
       expiresAt: result.userReward.expiresAt,
@@ -238,6 +246,8 @@ export class RewardController {
 
   // Admin endpoints
   @Post('admin/create')
+  @Admin()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Create new reward (Admin only)' })
   @ApiResponse({ 
     status: 201, 
@@ -267,17 +277,19 @@ export class RewardController {
       id: reward.id,
       name: reward.title,
       description: reward.description,
-      type: reward.type as any,
+      type: this.mapRewardTypeToDto(reward.type),
       cost: reward.creditCost,
       imageUrl: reward.imageUrl,
       availableQuantity: reward.remainingQuantity || 0,
-      status: reward.status as any,
+      status: this.mapRewardStatusToDto(reward.status),
       expiryDate: createRewardDto.expiryDate,
       createdAt: reward.createdAt,
     };
   }
 
   @Put('admin/:id')
+  @Admin()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Update reward (Admin only)' })
   @ApiParam({ name: 'id', description: 'Reward ID' })
   @ApiResponse({ 
@@ -307,17 +319,19 @@ export class RewardController {
       id: reward.id,
       name: reward.title,
       description: reward.description,
-      type: reward.type as any,
+      type: this.mapRewardTypeToDto(reward.type),
       cost: reward.creditCost,
       imageUrl: reward.imageUrl,
       availableQuantity: reward.remainingQuantity || 0,
-      status: reward.status as any,
+      status: this.mapRewardStatusToDto(reward.status),
       expiryDate: updateRewardDto.expiryDate,
       createdAt: reward.createdAt,
     };
   }
 
   @Delete('admin/:id')
+  @Admin()
+  @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Delete reward (Admin only)' })
   @ApiParam({ name: 'id', description: 'Reward ID' })
   @ApiResponse({ status: 200, description: 'Reward deleted successfully' })
@@ -326,5 +340,35 @@ export class RewardController {
     const result = await this.deleteRewardUseCase.execute({ id });
     
     return { message: result.message };
+  }
+
+  // Helper methods for type mapping
+  private mapRewardTypeToDto(domainType: RewardType): RewardTypeDto {
+    const mapping = {
+      [RewardType.DISCOUNT_COUPON]: RewardTypeDto.DISCOUNT_COUPON,
+      [RewardType.GIFT_CARD]: RewardTypeDto.GIFT_CARD,
+      [RewardType.PHYSICAL_ITEM]: RewardTypeDto.ECO_PRODUCT,
+      [RewardType.EXPERIENCE]: RewardTypeDto.EXPERIENCE,
+    };
+    return mapping[domainType] || RewardTypeDto.ECO_PRODUCT;
+  }
+
+  private mapRewardStatusToDto(domainStatus: RewardStatus): RewardStatusDto {
+    const mapping = {
+      [RewardStatus.ACTIVE]: RewardStatusDto.AVAILABLE,
+      [RewardStatus.INACTIVE]: RewardStatusDto.DISCONTINUED,
+      [RewardStatus.OUT_OF_STOCK]: RewardStatusDto.OUT_OF_STOCK,
+    };
+    return mapping[domainStatus] || RewardStatusDto.AVAILABLE;
+  }
+
+  private mapUserRewardStatusToDto(domainStatus: UserRewardStatus): UserRewardStatusDto {
+    const mapping = {
+      [UserRewardStatus.PURCHASED]: UserRewardStatusDto.CONFIRMED,
+      [UserRewardStatus.USED]: UserRewardStatusDto.DELIVERED,
+      [UserRewardStatus.EXPIRED]: UserRewardStatusDto.EXPIRED,
+      [UserRewardStatus.REFUNDED]: UserRewardStatusDto.CANCELLED,
+    };
+    return mapping[domainStatus] || UserRewardStatusDto.PENDING;
   }
 }

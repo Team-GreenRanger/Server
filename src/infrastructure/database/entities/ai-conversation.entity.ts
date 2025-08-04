@@ -8,18 +8,8 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { UserEntity } from './user.entity';
-
-export enum MessageRoleEntity {
-  USER = 'USER',
-  ASSISTANT = 'ASSISTANT',
-  SYSTEM = 'SYSTEM',
-}
-
-export enum ConversationStatusEntity {
-  ACTIVE = 'ACTIVE',
-  ARCHIVED = 'ARCHIVED',
-  DELETED = 'DELETED',
-}
+import { ConversationStatus } from '../../../domain/ai-assistant/entities/conversation.entity';
+import { MessageRole } from '../../../domain/ai-assistant/entities/message.entity';
 
 @Entity('ai_conversations')
 export class AiConversationEntity {
@@ -34,10 +24,10 @@ export class AiConversationEntity {
 
   @Column({
     type: 'enum',
-    enum: ConversationStatusEntity,
-    default: ConversationStatusEntity.ACTIVE,
+    enum: ConversationStatus,
+    default: ConversationStatus.ACTIVE,
   })
-  status: ConversationStatusEntity;
+  status: ConversationStatus;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -45,7 +35,6 @@ export class AiConversationEntity {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Relations
   @ManyToOne(() => UserEntity)
   @JoinColumn({ name: 'userId' })
   user: UserEntity;
@@ -61,9 +50,9 @@ export class AiMessageEntity {
 
   @Column({
     type: 'enum',
-    enum: MessageRoleEntity,
+    enum: MessageRole,
   })
-  role: MessageRoleEntity;
+  role: MessageRole;
 
   @Column('text')
   content: string;
@@ -74,7 +63,6 @@ export class AiMessageEntity {
   @CreateDateColumn()
   createdAt: Date;
 
-  // Relations
   @ManyToOne(() => AiConversationEntity)
   @JoinColumn({ name: 'conversationId' })
   conversation: AiConversationEntity;

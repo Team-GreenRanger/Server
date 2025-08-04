@@ -35,6 +35,9 @@ export class UserEntity {
   @Column('boolean', { default: true })
   isActive: boolean;
 
+  @Column('boolean', { default: false })
+  isAdmin: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

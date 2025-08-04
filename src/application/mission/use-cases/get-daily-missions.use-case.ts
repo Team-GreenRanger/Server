@@ -49,7 +49,7 @@ export class GetDailyMissionsUseCase {
       const userMission = UserMission.create({
         userId,
         missionId: mission.id,
-        targetProgress: 1,
+        targetProgress: mission.requiredSubmissions, // 미션에서 설정한 필수 제출 횟수
       });
       
       const savedUserMission = await this.userMissionRepository.save(userMission);

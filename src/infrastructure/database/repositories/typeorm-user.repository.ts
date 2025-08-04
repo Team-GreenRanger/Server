@@ -65,6 +65,7 @@ export class TypeOrmUserRepository implements IUserRepository {
     entity.profileImageUrl = user.profileImageUrl;
     entity.isVerified = user.isVerified;
     entity.isActive = user.isActive;
+    entity.isAdmin = user.isAdmin;
     entity.createdAt = user.createdAt;
     entity.updatedAt = user.updatedAt;
     return entity;
@@ -79,6 +80,7 @@ export class TypeOrmUserRepository implements IUserRepository {
       profileImageUrl: entity.profileImageUrl,
       isVerified: entity.isVerified,
       isActive: entity.isActive,
+      isAdmin: entity.isAdmin,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     });

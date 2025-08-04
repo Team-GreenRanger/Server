@@ -199,10 +199,33 @@ export class UserMission {
   }
 
   public canSubmit(): boolean {
-    return this._status === UserMissionStatus.IN_PROGRESS;
+    return this._status === UserMissionStatus.ASSIGNED || 
+           this._status === UserMissionStatus.IN_PROGRESS || 
+           this._status === UserMissionStatus.REJECTED;
   }
 
   public canVerify(): boolean {
     return this._status === UserMissionStatus.SUBMITTED;
+  }
+
+  public isFullyCompleted(): boolean {
+    return this._currentProgress >= this._targetProgress;
+  }
+
+  public incrementProgress(): void {
+    if (this._currentProgress < this._targetProgress) {
+      this._currentProgress++;
+      this._updatedAt = new Date();
+    }
+  }
+
+  public needsMoreSubmissions(): boolean {
+    return this._currentProgress < this._targetProgress;
+  }
+
+  public continueProgress(): void {
+    // 검증 후 더 제출이 필요한 경우 IN_PROGRESS 상태로 돌아감
+    this._status = UserMissionStatus.IN_PROGRESS;
+    this._updatedAt = new Date();
   }
 }

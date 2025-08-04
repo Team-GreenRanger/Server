@@ -47,7 +47,7 @@ export class RegisterUseCase {
     const savedUser = await this.userRepository.save(user);
 
     // Generate JWT token
-    const payload = { sub: savedUser.id, email: savedUser.email };
+    const payload = { sub: savedUser.id, email: savedUser.email, isAdmin: savedUser.isAdmin };
     const accessToken = this.jwtService.sign(payload);
 
     return {

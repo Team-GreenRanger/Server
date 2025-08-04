@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBadRequestResponse, ApiConflictResponse } from '@nestjs/swagger';
 import { RegisterUseCase } from '../../../application/auth/use-cases/register.use-case';
 import { LoginUseCase } from '../../../application/auth/use-cases/login.use-case';
@@ -43,7 +43,7 @@ export class AuthController {
       };
     } catch (error) {
       if (error.message === 'User already exists with this email') {
-        throw new Error('CONFLICT: User already exists');
+        throw new ConflictException('User already exists with this email');
       }
       throw error;
     }
@@ -78,7 +78,7 @@ export class AuthController {
       };
     } catch (error) {
       if (error.message === 'Invalid credentials' || error.message === 'Account is deactivated') {
-        throw new Error('UNAUTHORIZED: ' + error.message);
+        throw new UnauthorizedException(error.message);
       }
       throw error;
     }

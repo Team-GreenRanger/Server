@@ -54,6 +54,9 @@ export class MissionResponseDto {
   @ApiProperty({ description: 'Credit reward amount' })
   creditReward: number;
 
+  @ApiProperty({ description: 'Required number of submissions to complete' })
+  requiredSubmissions: number;
+
   @ApiPropertyOptional({ description: 'Mission image URL' })
   imageUrl?: string;
 
