@@ -19,6 +19,7 @@ export interface IUserRepository {
   delete(id: string): Promise<void>;
   exists(id: string): Promise<boolean>;
   existsByEmail(email: string): Promise<boolean>;
+  incrementMissionSolved(userId: string): Promise<User>;
 }
 
 export const USER_REPOSITORY = Symbol('USER_REPOSITORY');

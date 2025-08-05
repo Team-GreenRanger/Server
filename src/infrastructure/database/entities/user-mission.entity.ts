@@ -40,8 +40,7 @@ export class UserMissionEntity {
   @Column('int', { default: 0 })
   currentProgress: number;
 
-  @Column('int', { default: 1 })
-  targetProgress: number;
+
 
   @Column('json', { nullable: true })
   submissionImageUrls: string[];

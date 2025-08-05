@@ -91,6 +91,16 @@ export class TypeOrmUserRepository implements IUserRepository {
     return count > 0;
   }
 
+  async incrementMissionSolved(userId: string): Promise<User> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    user.incrementMissionSolved();
+    return await this.save(user);
+  }
+
   private toEntity(user: User): UserEntity {
     const entity = new UserEntity();
     entity.id = user.id;
@@ -98,6 +108,9 @@ export class TypeOrmUserRepository implements IUserRepository {
     entity.name = user.name;
     entity.hashedPassword = user.hashedPassword;
     entity.profileImageUrl = user.profileImageUrl;
+    entity.nationality = user.nationality;
+    entity.age = user.age;
+    entity.totalMissionSolved = user.totalMissionSolved;
     entity.isVerified = user.isVerified;
     entity.isActive = user.isActive;
     entity.isAdmin = user.isAdmin;
@@ -113,6 +126,9 @@ export class TypeOrmUserRepository implements IUserRepository {
       name: entity.name,
       hashedPassword: entity.hashedPassword,
       profileImageUrl: entity.profileImageUrl,
+      nationality: entity.nationality,
+      age: entity.age,
+      totalMissionSolved: entity.totalMissionSolved || 0,
       isVerified: entity.isVerified,
       isActive: entity.isActive,
       isAdmin: entity.isAdmin,

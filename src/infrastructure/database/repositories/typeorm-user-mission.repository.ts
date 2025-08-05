@@ -119,7 +119,7 @@ export class TypeOrmUserMissionRepository implements IUserMissionRepository {
     entity.missionId = userMission.missionId;
     entity.status = userMission.status as unknown as UserMissionStatusEntity;
     entity.currentProgress = userMission.currentProgress;
-    entity.targetProgress = userMission.targetProgress;
+
     entity.submissionImageUrls = userMission.submissionImageUrls;
     entity.submissionNote = userMission.submissionNote;
     entity.verificationNote = userMission.verificationNote;
@@ -138,7 +138,7 @@ export class TypeOrmUserMissionRepository implements IUserMissionRepository {
       missionId: entity.missionId,
       status: entity.status as unknown as UserMissionStatus,
       currentProgress: entity.currentProgress,
-      targetProgress: entity.targetProgress,
+
       submissionImageUrls: entity.submissionImageUrls || [],
       submissionNote: entity.submissionNote,
       verificationNote: entity.verificationNote,

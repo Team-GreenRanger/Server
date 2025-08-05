@@ -7,9 +7,14 @@ export enum RankingType {
 }
 
 export enum RankingPeriod {
+  WEEKLY = 'WEEKLY',
   MONTHLY = 'MONTHLY',
-  YEARLY = 'YEARLY',
   ALL_TIME = 'ALL_TIME',
+}
+
+export enum RankingScope {
+  LOCAL = 'LOCAL',
+  GLOBAL = 'GLOBAL',
 }
 
 export class RankingEntry {

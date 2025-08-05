@@ -16,7 +16,6 @@ export class UserMission {
     private readonly _missionId: string,
     private _status: UserMissionStatus = UserMissionStatus.ASSIGNED,
     private _currentProgress: number = 0,
-    private readonly _targetProgress: number = 1,
     private _submissionImageUrls: string[] = [],
     private _submissionNote?: string,
     private _verificationNote?: string,
@@ -30,7 +29,6 @@ export class UserMission {
   public static create(props: {
     userId: string;
     missionId: string;
-    targetProgress?: number;
   }): UserMission {
     return new UserMission(
       uuidv4(),
@@ -38,7 +36,6 @@ export class UserMission {
       props.missionId,
       UserMissionStatus.ASSIGNED,
       0,
-      props.targetProgress || 1,
     );
   }
 
@@ -48,7 +45,6 @@ export class UserMission {
     missionId: string;
     status: UserMissionStatus;
     currentProgress: number;
-    targetProgress: number;
     submissionImageUrls: string[];
     submissionNote?: string;
     verificationNote?: string;
@@ -64,7 +60,6 @@ export class UserMission {
       props.missionId,
       props.status,
       props.currentProgress,
-      props.targetProgress,
       props.submissionImageUrls,
       props.submissionNote,
       props.verificationNote,
@@ -97,9 +92,7 @@ export class UserMission {
     return this._currentProgress;
   }
 
-  public get targetProgress(): number {
-    return this._targetProgress;
-  }
+
 
   public get submissionImageUrls(): string[] {
     return [...this._submissionImageUrls];
@@ -184,21 +177,20 @@ export class UserMission {
       throw new Error('Mission must be verified to complete');
     }
     this._status = UserMissionStatus.COMPLETED;
-    this._currentProgress = this._targetProgress;
     this._completedAt = new Date();
     this._updatedAt = new Date();
   }
 
-  public updateProgress(progress: number): void {
-    if (progress < 0 || progress > this._targetProgress) {
+  public updateProgress(progress: number, requiredSubmissions: number): void {
+    if (progress < 0 || progress > requiredSubmissions) {
       throw new Error('Invalid progress value');
     }
     this._currentProgress = progress;
     this._updatedAt = new Date();
   }
 
-  public getProgressPercentage(): number {
-    return (this._currentProgress / this._targetProgress) * 100;
+  public getProgressPercentage(requiredSubmissions: number): number {
+    return (this._currentProgress / requiredSubmissions) * 100;
   }
 
   public isCompleted(): boolean {
@@ -215,19 +207,23 @@ export class UserMission {
     return this._status === UserMissionStatus.SUBMITTED;
   }
 
-  public isFullyCompleted(): boolean {
-    return this._currentProgress >= this._targetProgress;
+  public isFullyCompleted(requiredSubmissions: number): boolean {
+    return this._currentProgress >= requiredSubmissions;
   }
 
-  public incrementProgress(): void {
-    if (this._currentProgress < this._targetProgress) {
+  public incrementProgress(requiredSubmissions: number): void {
+    if (this._currentProgress < requiredSubmissions) {
       this._currentProgress++;
       this._updatedAt = new Date();
     }
   }
 
-  public needsMoreSubmissions(): boolean {
-    return this._currentProgress < this._targetProgress;
+  public needsMoreSubmissions(requiredSubmissions: number): boolean {
+    return this._currentProgress < requiredSubmissions;
+  }
+
+  public getRemainingSubmissions(requiredSubmissions: number): number {
+    return Math.max(0, requiredSubmissions - this._currentProgress);
   }
 
   public continueProgress(): void {

@@ -85,14 +85,8 @@ export class UserStatisticsResponseDto {
   currentCarbonCredits: number;
 
   @ApiProperty({ description: 'Total CO2 reduction in kg' })
-  totalCo2Reduction: number;
+  totalCo2Reduction: string;
 
-  @ApiProperty({ description: 'Current level' })
-  currentLevel: number;
-
-  @ApiProperty({ description: 'Days since account creation' })
-  daysSinceJoined: number;
-
-  @ApiProperty({ description: 'Global ranking position' })
-  globalRanking: number;
+  @ApiProperty({ description: 'Total mission solved count' })
+  totalMissionSolved: number;
 }

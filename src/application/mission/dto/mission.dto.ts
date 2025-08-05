@@ -86,11 +86,10 @@ export class UserMissionResponseDto {
   @ApiProperty({ enum: UserMissionStatusDto, description: 'User mission status' })
   status: UserMissionStatusDto;
 
-  @ApiProperty({ description: 'Current progress' })
+  @ApiProperty({ description: 'Current progress (완료한 횟수)' })
   currentProgress: number;
 
-  @ApiProperty({ description: 'Target progress' })
-  targetProgress: number;
+
 
   @ApiProperty({ type: [String], description: 'Submission image URLs' })
   submissionImageUrls: string[];
@@ -119,8 +118,14 @@ export class UserMissionResponseDto {
   @ApiProperty({ description: 'Whether mission is done (completed)' })
   isDone: boolean;
 
-  @ApiPropertyOptional({ description: 'Mission details' })
-  mission?: MissionResponseDto;
+  @ApiProperty({ description: 'Mission details (항상 포함됨)', type: MissionResponseDto })
+  mission: MissionResponseDto; // Optional이 아닌 필수로 변경
+
+  @ApiProperty({ description: 'Progress percentage (0-100)' })
+  progressPercentage: number;
+
+  @ApiProperty({ description: 'Remaining submissions needed (based on mission.requiredSubmissions)' })
+  remainingSubmissions: number;
 }
 
 export class AssignMissionDto {
@@ -128,12 +133,7 @@ export class AssignMissionDto {
   @IsUUID()
   missionId: string;
 
-  @ApiPropertyOptional({ description: 'Target progress (default: 1)', minimum: 1 })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Type(() => Number)
-  targetProgress?: number;
+
 }
 
 export class SubmitMissionDto {

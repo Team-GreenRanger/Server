@@ -98,17 +98,27 @@ export class ClaudeService {
 Mission: "${missionTitle}"
 Description: ${missionDescription}
 
-Verification Criteria:
+Verification Criteria (Any ONE of these criteria being met is sufficient for approval):
 ${verificationCriteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
+
+⚠️ IMPORTANT: This mission should be APPROVED if the image shows ANY ONE of the above criteria being met. You don't need to see ALL criteria - just ONE is enough for approval.
 
 Analyze the provided image to determine if it successfully demonstrates completion of this mission.
 
 ${note ? `User's note: "${note}"\nConsider this context in your assessment.\n` : ''}
 Look for:
-- Clear evidence that matches the mission requirements
+- Clear evidence that matches AT LEAST ONE of the mission requirements (not all of them)
 - Authentic, non-staged environmental actions
 - Proper context and setting for the claimed activity
-- Evidence that the verification criteria are met
+- Evidence that ANY ONE of the verification criteria is met
+
+Approval Guidelines:
+✅ APPROVE if you can identify ANY ONE verification criterion being met
+✅ APPROVE if the image shows genuine environmental effort, even if not perfect
+✅ APPROVE if the context and user note support the environmental claim
+❌ REJECT only if clearly fake, staged, or completely unrelated to environmental activity
+
+Be GENEROUS and SUPPORTIVE in your assessment. The goal is to encourage environmental action, not to be overly strict.
 
 Respond with a JSON object in this exact format:
 {
@@ -119,7 +129,7 @@ Respond with a JSON object in this exact format:
   "suggestions": ["optional", "improvement", "suggestions"]
 }
 
-Be thorough but fair in your assessment. Approve genuine eco-friendly activities that meet the criteria and reject staged or non-environmental content.`;
+Be encouraging and fair in your assessment. Approve genuine eco-friendly activities that meet ANY ONE of the criteria.`;
 
       console.log('Claude prompt length:', prompt.length);
       console.log('Claude prompt preview (first 200 chars):', prompt.substring(0, 200));
@@ -248,13 +258,21 @@ Analyze the provided image to determine if it shows genuine completion of an env
 
 Mission ID: ${missionId}
 
-Look for:
-- Clear evidence of eco-friendly activity (recycling, using public transport, renewable energy, etc.)
-- Authentic, non-staged environmental actions
-- Proper context and setting for the claimed activity
-- Signs of genuine participation rather than posed photos
+⚠️ IMPORTANT: Be GENEROUS and SUPPORTIVE in your assessment. The goal is to encourage environmental action.
 
-${note ? `User's note: "${note}"\nConsider this context in your assessment.` : ''}
+Look for:
+- ANY evidence of eco-friendly activity (recycling, using public transport, renewable energy, etc.)
+- Authentic environmental actions (even if not perfect)
+- Proper context and setting for the claimed activity
+- Signs of genuine participation rather than completely staged photos
+
+${note ? `User's note: "${note}"\nConsider this context in your assessment and give extra credit for user effort.` : ''}
+
+Approval Guidelines:
+✅ APPROVE if you can see ANY genuine environmental effort
+✅ APPROVE if the context suggests real environmental action
+✅ APPROVE if the user note explains the environmental benefit
+❌ REJECT only if clearly fake, staged, or completely unrelated to environment
 
 Respond with a JSON object in this exact format:
 {
@@ -265,7 +283,7 @@ Respond with a JSON object in this exact format:
   "suggestions": ["optional", "improvement", "suggestions"]
 }
 
-Be fair but thorough. Approve genuine eco-friendly activities and reject staged or non-environmental content.`;
+Be encouraging and fair. Approve genuine eco-friendly activities even if they're not perfect.`;
 
       const payload = {
         model: 'claude-3-5-sonnet-20241022',
@@ -440,10 +458,19 @@ Be fair but thorough. Approve genuine eco-friendly activities and reject staged 
     
 Mission: "${missionDescription}"
 
-Verification Criteria:
+Verification Criteria (Any ONE of these criteria being met is sufficient for approval):
 ${criteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
 
+⚠️ IMPORTANT: This mission should be APPROVED if the image shows ANY ONE of the above criteria being met. You don't need to see ALL criteria - just ONE is enough for approval.
+
 Please analyze the provided image and determine if it successfully demonstrates completion of this mission.
+
+Approval Guidelines:
+✅ APPROVE if you can identify ANY ONE verification criterion being met
+✅ APPROVE if the image shows genuine environmental effort, even if not perfect
+❌ REJECT only if clearly fake, staged, or completely unrelated to environmental activity
+
+Be GENEROUS and SUPPORTIVE in your assessment. The goal is to encourage environmental action, not to be overly strict.
 
 Respond with a JSON object in this exact format:
 {
@@ -454,7 +481,7 @@ Respond with a JSON object in this exact format:
   "suggestions": ["optional", "improvement", "suggestions"]
 }
 
-Be thorough but fair in your assessment. Look for clear evidence that the mission criteria have been met.`;
+Be encouraging and fair in your assessment. Look for clear evidence that ANY ONE of the mission criteria has been met.`;
   }
 
   private parseVerificationResponse(responseText: string): ImageVerificationResponse {

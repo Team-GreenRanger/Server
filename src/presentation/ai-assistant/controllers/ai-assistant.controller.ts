@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ChatWithAIUseCase } from '../../../application/ai-assistant/use-cases/chat-with-ai.use-case';
 import { VerifyImageWithAIUseCase } from '../../../application/ai-assistant/use-cases/verify-image-with-ai.use-case';
 import { GetConversationsUseCase } from '../../../application/ai-assistant/use-cases/get-conversations.use-case';
+import { AnalyzeTrashSortingUseCase } from '../../../application/ai-assistant/use-cases/analyze-trash-sorting.use-case';
 import { GeminiService } from '../../../infrastructure/external-apis/gemini/gemini.service';
 import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 import { 
@@ -32,7 +33,9 @@ import {
   GenerateEcoTipResponseDto,
   ConversationListResponseDto,
   EcoEducationContentDto,
-  EcoEducationContentResponseDto
+  EcoEducationContentResponseDto,
+  TrashSortingDto,
+  TrashSortingResponseDto
 } from '../../../application/ai-assistant/dto/ai-assistant.dto';
 
 @ApiTags('AI Assistant')
@@ -42,6 +45,7 @@ export class AIAssistantController {
     private readonly chatWithAIUseCase: ChatWithAIUseCase,
     private readonly verifyImageWithAIUseCase: VerifyImageWithAIUseCase,
     private readonly getConversationsUseCase: GetConversationsUseCase,
+    private readonly analyzeTrashSortingUseCase: AnalyzeTrashSortingUseCase,
     private readonly geminiService: GeminiService,
     private readonly claudeService: ClaudeService,
     @Inject(CONVERSATION_REPOSITORY)
@@ -205,6 +209,37 @@ export class AIAssistantController {
       topic: contentDto.topic,
       wordCount: content.split(' ').length,
       timestamp: new Date(),
+    };
+  }
+
+  @Post('how-to-trash')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '쓰레기 분리수거 방법 AI 분석 - 사진을 업로드하면 올바른 버리는 방법을 알려줍니다' })
+  @ApiResponse({ 
+    status: 200, 
+    description: '쓰레기 분리수거 분석 결과', 
+    type: TrashSortingResponseDto 
+  })
+  async analyzeTrashSorting(
+    @Request() req: any,
+    @Body() trashDto: TrashSortingDto,
+  ): Promise<TrashSortingResponseDto> {
+    const userId = req.user.sub;
+    
+    const result = await this.analyzeTrashSortingUseCase.execute({
+      userId,
+      imageUrl: trashDto.imageUrl,
+    });
+
+    return {
+      trashType: result.trashType,
+      disposalMethod: result.disposalMethod,
+      countrySpecificGuidelines: result.countrySpecificGuidelines,
+      userCountry: result.userCountry,
+      confidence: result.confidence,
+      additionalTips: result.additionalTips,
+      timestamp: result.timestamp,
     };
   }
 }

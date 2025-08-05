@@ -7,6 +7,9 @@ export class User {
     private _name: string,
     private _hashedPassword: string,
     private _profileImageUrl?: string,
+    private _nationality?: string,
+    private _age?: number,
+    private _totalMissionSolved: number = 0,
     private _isVerified: boolean = false,
     private _isActive: boolean = true,
     private _isAdmin: boolean = false,
@@ -19,6 +22,8 @@ export class User {
     name: string;
     hashedPassword: string;
     profileImageUrl?: string;
+    nationality?: string;
+    age?: number;
     isAdmin?: boolean;
   }): User {
     return new User(
@@ -27,6 +32,9 @@ export class User {
       props.name,
       props.hashedPassword,
       props.profileImageUrl,
+      props.nationality,
+      props.age,
+      0, // totalMissionSolved
       false, // isVerified
       true, // isActive
       props.isAdmin || false, // isAdmin
@@ -39,6 +47,9 @@ export class User {
     name: string;
     hashedPassword: string;
     profileImageUrl?: string;
+    nationality?: string;
+    age?: number;
+    totalMissionSolved: number;
     isVerified: boolean;
     isActive: boolean;
     isAdmin: boolean;
@@ -51,6 +62,9 @@ export class User {
       props.name,
       props.hashedPassword,
       props.profileImageUrl,
+      props.nationality,
+      props.age,
+      props.totalMissionSolved,
       props.isVerified,
       props.isActive,
       props.isAdmin,
@@ -100,10 +114,24 @@ export class User {
     return this._updatedAt;
   }
 
+  public get nationality(): string | undefined {
+    return this._nationality;
+  }
+
+  public get age(): number | undefined {
+    return this._age;
+  }
+
+  public get totalMissionSolved(): number {
+    return this._totalMissionSolved;
+  }
+
   // Business Methods
-  public updateProfile(name: string, profileImageUrl?: string): void {
+  public updateProfile(name: string, profileImageUrl?: string, nationality?: string, age?: number): void {
     this._name = name;
     this._profileImageUrl = profileImageUrl;
+    this._nationality = nationality;
+    this._age = age;
     this._updatedAt = new Date();
   }
 
@@ -129,6 +157,11 @@ export class User {
 
   public setAdminRole(isAdmin: boolean): void {
     this._isAdmin = isAdmin;
+    this._updatedAt = new Date();
+  }
+
+  public incrementMissionSolved(): void {
+    this._totalMissionSolved += 1;
     this._updatedAt = new Date();
   }
 }

@@ -28,7 +28,7 @@ import type { ICarbonCreditRepository } from '../../../domain/carbon-credit/repo
 import { CARBON_CREDIT_REPOSITORY } from '../../../domain/carbon-credit/repositories/carbon-credit.repository.interface';
 import type { IRankingRepository } from '../../../domain/ranking/repositories/ranking.repository.interface';
 import { RANKING_REPOSITORY } from '../../../domain/ranking/repositories/ranking.repository.interface';
-import { RankingType } from '../../../domain/ranking/entities/ranking-snapshot.entity';
+import { RankingType, RankingPeriod, RankingScope } from '../../../domain/ranking/entities/ranking-snapshot.entity';
 import { 
   UserProfileResponseDto,
   UpdateUserProfileDto,
@@ -204,12 +204,11 @@ export class UserController {
     const userId = req.user.sub;
     
     // 병렬로 모든 데이터 조회
-    const [user, totalMissionsCompleted, completedUserMissions, carbonCredit, rankingResult] = await Promise.all([
+    const [user, totalMissionsCompleted, completedUserMissions, carbonCredit] = await Promise.all([
       this.userRepository.findById(userId),
       this.userMissionRepository.countCompletedMissions(userId),
       this.userMissionRepository.findCompletedMissionsByUserId(userId),
-      this.carbonCreditRepository.findByUserId(userId),
-      this.rankingRepository.getUserCurrentRanking(userId, RankingType.MISSIONS_COMPLETED).catch(() => null)
+      this.carbonCreditRepository.findByUserId(userId)
     ]);
     
     if (!user) {
@@ -222,22 +221,20 @@ export class UserController {
     );
     const missions = await Promise.all(missionPromises);
     
-    const totalCo2Reduction = missions.reduce((total, mission) => {
+    const totalCo2ReductionNum = missions.reduce((total, mission) => {
       return total + (mission ? mission.co2ReductionAmount : 0);
     }, 0);
     
+    // CO2 감소량을 문자열로 포맷팅 (kg 단위, 소수점 2자리)
+    const totalCo2Reduction = totalCo2ReductionNum.toFixed(2);
+    
     const currentCarbonCredits = carbonCredit ? carbonCredit.balance : 0;
-    const currentLevel = 0;
-    const daysSinceJoined = Math.floor((new Date().getTime() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-    const globalRanking = rankingResult ? rankingResult.rank : 1;
     
     return {
       totalMissionsCompleted,
       currentCarbonCredits,
       totalCo2Reduction,
-      currentLevel,
-      daysSinceJoined,
-      globalRanking,
+      totalMissionSolved: user.totalMissionSolved,
     };
   }
 }

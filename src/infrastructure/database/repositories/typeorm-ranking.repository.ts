@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RankingSnapshot, RankingType, RankingPeriod, RankingEntry } from '../../../domain/ranking/entities/ranking-snapshot.entity';
-import { IRankingRepository, RankingData } from '../../../domain/ranking/repositories/ranking.repository.interface';
+import { RankingSnapshot, RankingType, RankingPeriod, RankingScope, RankingEntry } from '../../../domain/ranking/entities/ranking-snapshot.entity';
+import { IRankingRepository, RankingData, RankingQuery } from '../../../domain/ranking/repositories/ranking.repository.interface';
 import { UserEntity } from '../entities/user.entity';
 import { CarbonCreditEntity } from '../entities/carbon-credit.entity';
 import { UserMissionEntity, UserMissionStatusEntity } from '../entities/user-mission.entity';
 import { MissionEntity } from '../entities/mission.entity';
+import { maskUserName, getPeriodDateFilter } from '../../../shared/utils/ranking.utils';
 
 @Injectable()
 export class TypeOrmRankingRepository implements IRankingRepository {
@@ -37,73 +38,103 @@ export class TypeOrmRankingRepository implements IRankingRepository {
     return [];
   }
 
-  async getCurrentRankings(type: RankingType, limit: number = 10, offset: number = 0): Promise<{ rankings: RankingData[]; total: number }> {
+  async getCurrentRankings(query: RankingQuery): Promise<{ rankings: RankingData[]; total: number }> {
+    const { type, period, scope, nationality, limit = 10, offset = 0 } = query;
+    const dateFilter = getPeriodDateFilter(period);
+    
     let rankings: RankingData[] = [];
     let total = 0;
 
     switch (type) {
       case RankingType.CARBON_CREDITS:
-        const carbonRankings = await this.carbonCreditRepository
+        const carbonQuery = this.carbonCreditRepository
           .createQueryBuilder('cc')
           .innerJoin('cc.user', 'user')
           .select([
             'user.id as userId',
             'user.name as userName', 
             'user.profileImageUrl as profileImageUrl',
-            'cc.totalEarned as score'
+            'user.nationality as nationality',
+            'COALESCE(cc.totalEarned, 0) as score'
           ])
-          .where('user.isActive = :isActive', { isActive: true })
-          .orderBy('cc.totalEarned', 'DESC')
+          .where('user.isActive = :isActive', { isActive: true });
+
+        if (scope === RankingScope.LOCAL && nationality) {
+          carbonQuery.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        const carbonRankings = await carbonQuery
+          .orderBy('COALESCE(cc.totalEarned, 0)', 'DESC')
+          .addOrderBy('user.createdAt', 'ASC')
           .offset(offset)
           .limit(limit)
           .getRawMany();
 
-        const carbonTotal = await this.carbonCreditRepository
+        const carbonTotalQuery = this.carbonCreditRepository
           .createQueryBuilder('cc')
           .innerJoin('cc.user', 'user')
-          .where('user.isActive = :isActive', { isActive: true })
-          .getCount();
+          .where('user.isActive = :isActive', { isActive: true });
 
-        rankings = carbonRankings;
-        total = carbonTotal;
+        if (scope === RankingScope.LOCAL && nationality) {
+          carbonTotalQuery.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        total = await carbonTotalQuery.getCount();
+        rankings = carbonRankings.map(r => ({
+          ...r,
+          userName: maskUserName(r.userName),
+          score: parseFloat(r.score) || 0
+        }));
         break;
 
       case RankingType.MISSIONS_COMPLETED:
-        const missionRankings = await this.userMissionRepository
+        const missionQuery = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .select([
             'user.id as userId',
             'user.name as userName',
             'user.profileImageUrl as profileImageUrl',
+            'user.nationality as nationality',
             'COUNT(um.id) as score'
           ])
           .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id, user.name, user.profileImageUrl')
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          missionQuery.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
+
+        if (scope === RankingScope.LOCAL && nationality) {
+          missionQuery.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        const missionRankings = await missionQuery
+          .groupBy('user.id, user.name, user.profileImageUrl, user.nationality')
           .orderBy('COUNT(um.id)', 'DESC')
+          .addOrderBy('user.createdAt', 'ASC')
           .offset(offset)
           .limit(limit)
           .getRawMany();
 
-        const missionTotal = await this.userMissionRepository
-          .createQueryBuilder('um')
-          .innerJoin('um.user', 'user')
-          .select('user.id')
-          .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id')
-          .getCount();
+        const missionTotalQuery = this.userRepository
+          .createQueryBuilder('user')
+          .where('user.isActive = :isActive', { isActive: true });
 
+        if (scope === RankingScope.LOCAL && nationality) {
+          missionTotalQuery.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        total = await missionTotalQuery.getCount();
         rankings = missionRankings.map(r => ({
           ...r,
-          score: parseInt(r.score)
+          userName: maskUserName(r.userName),
+          score: parseInt(r.score) || 0
         }));
-        total = missionTotal;
         break;
 
       case RankingType.CO2_REDUCTION:
-        const co2Rankings = await this.userMissionRepository
+        const co2Query = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .innerJoin('um.mission', 'mission')
@@ -111,38 +142,53 @@ export class TypeOrmRankingRepository implements IRankingRepository {
             'user.id as userId',
             'user.name as userName',
             'user.profileImageUrl as profileImageUrl',
+            'user.nationality as nationality',
             'SUM(mission.co2ReductionAmount) as score'
           ])
           .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id, user.name, user.profileImageUrl')
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          co2Query.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
+
+        if (scope === RankingScope.LOCAL && nationality) {
+          co2Query.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        const co2Rankings = await co2Query
+          .groupBy('user.id, user.name, user.profileImageUrl, user.nationality')
           .orderBy('SUM(mission.co2ReductionAmount)', 'DESC')
+          .addOrderBy('user.createdAt', 'ASC')
           .offset(offset)
           .limit(limit)
           .getRawMany();
 
-        const co2Total = await this.userMissionRepository
-          .createQueryBuilder('um')
-          .innerJoin('um.user', 'user')
-          .innerJoin('um.mission', 'mission')
-          .select('user.id')
-          .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id')
-          .getCount();
+        const co2TotalQuery = this.userRepository
+          .createQueryBuilder('user')
+          .where('user.isActive = :isActive', { isActive: true });
 
+        if (scope === RankingScope.LOCAL && nationality) {
+          co2TotalQuery.andWhere('user.nationality = :nationality', { nationality });
+        }
+
+        total = await co2TotalQuery.getCount();
         rankings = co2Rankings.map(r => ({
           ...r,
+          userName: maskUserName(r.userName),
           score: parseFloat(r.score) || 0
         }));
-        total = co2Total;
         break;
     }
 
     return { rankings, total };
   }
 
-  async getUserCurrentRanking(userId: string, type: RankingType): Promise<{ rank: number; score: number; totalUsers: number; } | null> {
+  async getUserCurrentRanking(userId: string, type: RankingType, period: RankingPeriod, scope: RankingScope): Promise<{ rank: number; score: number; totalUsers: number; } | null> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) return null;
+
+    const dateFilter = getPeriodDateFilter(period);
     let userScore = 0;
     let totalUsers = 0;
     let rank = 1;
@@ -154,94 +200,128 @@ export class TypeOrmRankingRepository implements IRankingRepository {
           relations: ['user']
         });
         
-        if (!carbonCredit) return null;
+        userScore = carbonCredit?.totalEarned || 0;
         
-        userScore = carbonCredit.totalEarned;
-        
-        const higherCarbonUsers = await this.carbonCreditRepository
+        const higherCarbonQuery = this.carbonCreditRepository
           .createQueryBuilder('cc')
           .innerJoin('cc.user', 'user')
-          .where('cc.totalEarned > :userScore', { userScore })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .getCount();
+          .where('COALESCE(cc.totalEarned, 0) > :userScore', { userScore })
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          higherCarbonQuery.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
         
-        rank = higherCarbonUsers + 1;
+        rank = await higherCarbonQuery.getCount() + 1;
         
-        totalUsers = await this.carbonCreditRepository
+        const totalCarbonQuery = this.carbonCreditRepository
           .createQueryBuilder('cc')
           .innerJoin('cc.user', 'user')
-          .where('user.isActive = :isActive', { isActive: true })
-          .getCount();
+          .where('user.isActive = :isActive', { isActive: true });
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          totalCarbonQuery.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
+
+        totalUsers = await totalCarbonQuery.getCount();
         break;
 
       case RankingType.MISSIONS_COMPLETED:
-        const userMissionsCount = await this.userMissionRepository
+        const userMissionsQuery = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .where('um.userId = :userId', { userId })
           .andWhere('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .getCount();
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          userMissionsQuery.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
         
-        userScore = userMissionsCount;
+        userScore = await userMissionsQuery.getCount();
         
-        const higherMissionUsers = await this.userMissionRepository
+        const higherMissionQuery = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .select('COUNT(um.id) as missionCount')
           .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          higherMissionQuery.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          higherMissionQuery.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
+        
+        const higherMissionUsers = await higherMissionQuery
           .groupBy('user.id')
           .having('COUNT(um.id) > :userScore', { userScore })
           .getCount();
         
         rank = higherMissionUsers + 1;
         
-        totalUsers = await this.userMissionRepository
-          .createQueryBuilder('um')
-          .innerJoin('um.user', 'user')
-          .select('user.id')
-          .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id')
-          .getCount();
+        const totalMissionQuery = this.userRepository
+          .createQueryBuilder('user')
+          .where('user.isActive = :isActive', { isActive: true });
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          totalMissionQuery.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
+
+        totalUsers = await totalMissionQuery.getCount();
         break;
 
       case RankingType.CO2_REDUCTION:
-        const userCo2Reduction = await this.userMissionRepository
+        const userCo2Query = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .innerJoin('um.mission', 'mission')
           .select('SUM(mission.co2ReductionAmount) as totalReduction')
           .where('um.userId = :userId', { userId })
           .andWhere('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .getRawOne();
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          userCo2Query.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
         
+        const userCo2Reduction = await userCo2Query.getRawOne();
         userScore = parseFloat(userCo2Reduction?.totalReduction) || 0;
         
-        const higherCo2Users = await this.userMissionRepository
+        const higherCo2Query = this.userMissionRepository
           .createQueryBuilder('um')
           .innerJoin('um.user', 'user')
           .innerJoin('um.mission', 'mission')
           .select('SUM(mission.co2ReductionAmount) as totalReduction')
           .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
+          .andWhere('user.isActive = :isActive', { isActive: true });
+
+        if (dateFilter.startDate) {
+          higherCo2Query.andWhere('um.completedAt >= :startDate', { startDate: dateFilter.startDate });
+        }
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          higherCo2Query.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
+        
+        const higherCo2Users = await higherCo2Query
           .groupBy('user.id')
           .having('SUM(mission.co2ReductionAmount) > :userScore', { userScore })
           .getCount();
         
         rank = higherCo2Users + 1;
         
-        totalUsers = await this.userMissionRepository
-          .createQueryBuilder('um')
-          .innerJoin('um.user', 'user')
-          .innerJoin('um.mission', 'mission')
-          .select('user.id')
-          .where('um.status = :status', { status: UserMissionStatusEntity.COMPLETED })
-          .andWhere('user.isActive = :isActive', { isActive: true })
-          .groupBy('user.id')
-          .getCount();
+        const totalCo2Query = this.userRepository
+          .createQueryBuilder('user')
+          .where('user.isActive = :isActive', { isActive: true });
+
+        if (scope === RankingScope.LOCAL && user.nationality) {
+          totalCo2Query.andWhere('user.nationality = :nationality', { nationality: user.nationality });
+        }
+
+        totalUsers = await totalCo2Query.getCount();
         break;
     }
 
@@ -253,7 +333,7 @@ export class TypeOrmRankingRepository implements IRankingRepository {
   }
 
   async getUserRanking(userId: string, type: RankingType): Promise<RankingSnapshot | null> {
-    const userRanking = await this.getUserCurrentRanking(userId, type);
+    const userRanking = await this.getUserCurrentRanking(userId, type, RankingPeriod.ALL_TIME, RankingScope.GLOBAL);
     if (!userRanking) return null;
 
     const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -293,7 +373,14 @@ export class TypeOrmRankingRepository implements IRankingRepository {
   }
 
   async findTopRankings(type: RankingType, limit: number): Promise<RankingSnapshot[]> {
-    const result = await this.getCurrentRankings(type, limit);
+    const query: RankingQuery = {
+      type,
+      period: RankingPeriod.ALL_TIME,
+      scope: RankingScope.GLOBAL,
+      limit
+    };
+    
+    const result = await this.getCurrentRankings(query);
     const rankings = result.rankings.map((ranking, index) => 
       RankingEntry.create({
         rank: index + 1,

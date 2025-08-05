@@ -50,8 +50,7 @@ export class SubmitMissionUseCase {
       userId: userMission.userId,
       missionId: userMission.missionId,
       status: userMission.status,
-      currentProgress: userMission.currentProgress,
-      targetProgress: userMission.targetProgress
+      currentProgress: userMission.currentProgress
     });
 
     // Get mission details for verification
@@ -72,9 +71,23 @@ export class SubmitMissionUseCase {
     console.log('Validating submission...');
     console.log('Can submit?', userMission.canSubmit());
     console.log('Current status:', userMission.status);
+    console.log('Current progress:', userMission.currentProgress);
+    console.log('Required submissions:', mission.requiredSubmissions);
     
     if (!userMission.canSubmit()) {
+      console.error('=== SUBMISSION VALIDATION FAILED ===');
       console.error('Mission cannot be submitted in current status:', userMission.status);
+      console.error('Valid statuses for submission are: ASSIGNED, IN_PROGRESS, REJECTED');
+      console.error('UserMission details:', {
+        id: userMission.id,
+        userId: userMission.userId,
+        missionId: userMission.missionId,
+        status: userMission.status,
+        currentProgress: userMission.currentProgress,
+        submittedAt: userMission.submittedAt,
+        verifiedAt: userMission.verifiedAt,
+        completedAt: userMission.completedAt
+      });
       throw new Error('Mission cannot be submitted in current status');
     }
 
@@ -99,6 +112,7 @@ export class SubmitMissionUseCase {
     console.log('Saving user mission...');
     const savedUserMission = await this.userMissionRepository.save(userMission);
     console.log('User mission saved with ID:', savedUserMission.id);
+    console.log('New status after save:', savedUserMission.status);
 
     // Auto-verify with Claude API using detailed mission information
     console.log('=== STARTING AUTO-VERIFICATION ===');
@@ -127,6 +141,7 @@ export class SubmitMissionUseCase {
       console.log('- detectedElements:', verificationResult.detectedElements);
       console.log('- suggestions:', verificationResult.suggestions);
       console.log('=== AUTO-VERIFICATION SUCCESS ===');
+      console.log('=== SUBMIT MISSION USE CASE END (AUTO-VERIFIED) ===');
 
       return {
         userMission: savedUserMission,
@@ -144,6 +159,7 @@ export class SubmitMissionUseCase {
       console.error('Claude API verification failed - Error message:', error.message);
       console.error('Claude API verification failed - Error stack:', error.stack);
       console.error('Claude API verification failed - Full error:', error);
+      console.error('=== SUBMIT MISSION USE CASE END (AUTO-VERIFICATION FAILED) ===');
       
       return {
         userMission: savedUserMission,

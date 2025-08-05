@@ -49,10 +49,9 @@ export class GetDailyMissionsUseCase {
       const userMissionsWithDetails = await Promise.all(
         todayMissions.map(async (userMission) => {
           const mission = await this.missionRepository.findById(userMission.missionId);
-          return {
-            ...userMission,
-            mission
-          } as UserMission & { mission?: Mission | null };
+          // 도메인 엔티티의 메서드를 보존하기 위해 직접 프로퍼티 할당
+          (userMission as any).mission = mission;
+          return userMission as UserMission & { mission?: Mission | null };
         })
       );
 
@@ -62,30 +61,36 @@ export class GetDailyMissionsUseCase {
       };
     }
 
-    // Assign 5 random missions for today
+    // 사용 가능한 랜덤 미션 찾기 (5개 요청하지만 적어도 1개는 필요)
     const randomMissions = await this.missionRepository.findRandomActiveMissions(5);
     
+    console.log(`Found ${randomMissions.length} random active missions for user ${userId}`); // 디버깅
+    
     if (randomMissions.length === 0) {
+      console.error('No active missions available in database');
       throw new Error('No active missions available');
     }
 
     const userMissions: (UserMission & { mission?: Mission | null })[] = [];
     
+    // 발견된 모든 미션을 할당 (최대 5개, 최소 1개)
     for (const mission of randomMissions) {
+      console.log(`Assigning mission: ${mission.title} (${mission.id}) to user ${userId}`);
+      
       const userMission = UserMission.create({
         userId,
         missionId: mission.id,
-        targetProgress: mission.requiredSubmissions, // 미션에서 설정한 필수 제출 횟수
       });
       
       const savedUserMission = await this.userMissionRepository.save(userMission);
+      console.log(`Successfully assigned mission ${mission.id} to user ${userId}`);
       
-      // Include mission details
-      userMissions.push({
-        ...savedUserMission,
-        mission
-      } as UserMission & { mission?: Mission | null });
+      // 도메인 엔티티의 메서드를 보존하기 위해 직접 프로퍼티 할당
+      (savedUserMission as any).mission = mission;
+      userMissions.push(savedUserMission as UserMission & { mission?: Mission | null });
     }
+
+    console.log(`Total ${userMissions.length} missions assigned to user ${userId}`);
 
     return {
       userMissions,

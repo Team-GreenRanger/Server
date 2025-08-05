@@ -9,6 +9,7 @@ import { GetMissionByIdUseCase } from '../../application/mission/use-cases/get-m
 import { GetUserMissionsUseCase } from '../../application/mission/use-cases/get-user-missions.use-case';
 import { GetDailyMissionsUseCase } from '../../application/mission/use-cases/get-daily-missions.use-case';
 import { CreateMissionUseCase } from '../../application/mission/use-cases/create-mission.use-case';
+import { GetPendingVerificationsUseCase } from '../../application/mission/use-cases/get-pending-verifications.use-case';
 import { MissionEntity } from '../../infrastructure/database/entities/mission.entity';
 import { UserMissionEntity } from '../../infrastructure/database/entities/user-mission.entity';
 import { UserEntity } from '../../infrastructure/database/entities/user.entity';
@@ -45,6 +46,7 @@ import { CARBON_CREDIT_REPOSITORY } from '../../domain/carbon-credit/repositorie
     GetUserMissionsUseCase,
     GetDailyMissionsUseCase,
     CreateMissionUseCase,
+    GetPendingVerificationsUseCase,
     {
       provide: MISSION_REPOSITORY,
       useClass: TypeOrmMissionRepository,

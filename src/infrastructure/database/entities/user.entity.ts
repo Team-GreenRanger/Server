@@ -29,6 +29,15 @@ export class UserEntity {
   @Column('varchar', { length: 500, nullable: true })
   profileImageUrl?: string;
 
+  @Column('varchar', { length: 100, nullable: true })
+  nationality?: string;
+
+  @Column('int', { nullable: true })
+  age?: number;
+
+  @Column('int', { default: 0 })
+  totalMissionSolved: number;
+
   @Column('boolean', { default: false })
   isVerified: boolean;
 

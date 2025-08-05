@@ -10,6 +10,8 @@ import { UserRewardEntity } from './entities/user-reward.entity';
 import { NotificationEntity } from './entities/notification.entity';
 import { EcoLocationEntity } from './entities/eco-location.entity';
 import { AiConversationEntity, AiMessageEntity } from './entities/ai-conversation.entity';
+import { BikeNetworkEntity } from './entities/bike-network.entity';
+import { BikeStationEntity } from './entities/bike-station.entity';
 
 export const createDataSource = (configService: ConfigService) => {
   return new DataSource({
@@ -31,9 +33,11 @@ export const createDataSource = (configService: ConfigService) => {
       EcoLocationEntity,
       AiConversationEntity,
       AiMessageEntity,
+      BikeNetworkEntity,
+      BikeStationEntity,
     ],
-    migrations: [__dirname + '/migrations/*{.ts,.js}'],
-    synchronize: configService.get('NODE_ENV') === 'development',
+    migrations: [],
+    synchronize: true,
     logging: configService.get('NODE_ENV') === 'development',
     timezone: 'Z',
   });

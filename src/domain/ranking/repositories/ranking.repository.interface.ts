@@ -1,10 +1,20 @@
-import { RankingSnapshot, RankingType, RankingPeriod, RankingEntry } from '../entities/ranking-snapshot.entity';
+import { RankingSnapshot, RankingType, RankingPeriod, RankingScope, RankingEntry } from '../entities/ranking-snapshot.entity';
 
 export interface RankingData {
   userId: string;
   userName: string;
   profileImageUrl?: string;
+  nationality?: string;
   score: number;
+}
+
+export interface RankingQuery {
+  type: RankingType;
+  period: RankingPeriod;
+  scope: RankingScope;
+  nationality?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export interface IRankingRepository {
@@ -16,11 +26,11 @@ export interface IRankingRepository {
     periodIdentifier: string
   ): Promise<RankingSnapshot | null>;
   findSnapshotsByType(type: RankingType, limit?: number): Promise<RankingSnapshot[]>;
-  getCurrentRankings(type: RankingType, limit?: number, offset?: number): Promise<{
+  getCurrentRankings(query: RankingQuery): Promise<{
     rankings: RankingData[];
     total: number;
   }>;
-  getUserCurrentRanking(userId: string, type: RankingType): Promise<{
+  getUserCurrentRanking(userId: string, type: RankingType, period: RankingPeriod, scope: RankingScope): Promise<{
     rank: number;
     score: number;
     totalUsers: number;

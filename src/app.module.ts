@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { MulterModule } from '@nestjs/platform-express';
+import { ScheduleModule } from '@nestjs/schedule';
 import { createDataSource } from './infrastructure/database/data-source';
 import { ConfigService } from '@nestjs/config';
 
@@ -16,6 +17,8 @@ import { AiConversationEntity, AiMessageEntity } from './infrastructure/database
 import { UserEntity } from './infrastructure/database/entities/user.entity';
 import { MissionEntity } from './infrastructure/database/entities/mission.entity';
 import { UserMissionEntity } from './infrastructure/database/entities/user-mission.entity';
+import { BikeNetworkEntity } from './infrastructure/database/entities/bike-network.entity';
+import { BikeStationEntity } from './infrastructure/database/entities/bike-station.entity';
 
 // Infrastructure Services (moved to SharedServicesModule)
 // Repository implementations
@@ -35,6 +38,7 @@ import { RANKING_REPOSITORY } from './domain/ranking/repositories/ranking.reposi
 import { ChatWithAIUseCase } from './application/ai-assistant/use-cases/chat-with-ai.use-case';
 import { VerifyImageWithAIUseCase } from './application/ai-assistant/use-cases/verify-image-with-ai.use-case';
 import { GetConversationsUseCase } from './application/ai-assistant/use-cases/get-conversations.use-case';
+import { AnalyzeTrashSortingUseCase } from './application/ai-assistant/use-cases/analyze-trash-sorting.use-case';
 import { GetCarbonCreditBalanceUseCase } from './application/carbon-credit/use-cases/get-carbon-credit-balance.use-case';
 import { GetTransactionHistoryUseCase } from './application/carbon-credit/use-cases/get-transaction-history.use-case';
 import { GetCarbonCreditStatisticsUseCase } from './application/carbon-credit/use-cases/get-carbon-credit-statistics.use-case';
@@ -56,6 +60,7 @@ import { UploadController } from './presentation/upload/upload.controller';
 import { UserController } from './presentation/user/controllers/user.controller';
 import { RankingController } from './presentation/ranking/controllers/ranking.controller';
 import { RewardController } from './presentation/reward/controllers/reward.controller';
+import { BikeController } from './presentation/bike/bike.controller';
 
 // Modules
 import { AuthModule } from './presentation/auth/auth.module';
@@ -64,6 +69,12 @@ import { MissionModule } from './presentation/mission/mission.module';
 import { AdminModule } from './presentation/admin/admin.module';
 import { SharedServicesModule } from './shared/modules/shared-services.module';
 
+// Initial Setup Service
+import { InitialAdminSetupService } from './shared/utils/initial-admin-setup.service';
+
+// Scheduler Services
+import { BikeNetworkSchedulerService } from './infrastructure/scheduler/bike-network-scheduler.service';
+
 @Module({
   imports: [
     // Configuration
@@ -71,6 +82,9 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+
+    // Scheduler
+    ScheduleModule.forRoot(),
 
     // Database
     TypeOrmModule.forRootAsync({
@@ -89,6 +103,8 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
       AiMessageEntity,
       MissionEntity,
       UserMissionEntity,
+      BikeNetworkEntity,
+      BikeStationEntity,
     ]),
 
     // JWT
@@ -176,6 +192,7 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     ChatWithAIUseCase,
     VerifyImageWithAIUseCase,
     GetConversationsUseCase,
+    AnalyzeTrashSortingUseCase,
     GetCarbonCreditBalanceUseCase,
     GetTransactionHistoryUseCase,
     GetCarbonCreditStatisticsUseCase,
@@ -189,6 +206,12 @@ import { SharedServicesModule } from './shared/modules/shared-services.module';
     CreateRewardUseCase,
     UpdateRewardUseCase,
     DeleteRewardUseCase,
+    
+    // Initial Setup Service - 서버 시작 시 관리자 계정 생성
+    InitialAdminSetupService,
+    
+    // Scheduler Services
+    BikeNetworkSchedulerService,
   ],
 })
 export class AppModule {}

@@ -14,6 +14,11 @@ export enum RankingTypeDto {
   CO2_REDUCTION = 'CO2_REDUCTION',
 }
 
+export enum RankingScopeDto {
+  LOCAL = 'LOCAL',
+  GLOBAL = 'GLOBAL',
+}
+
 export class UserRankingDto {
   @ApiProperty({ description: 'Ranking position' })
   rank: number;
@@ -45,6 +50,11 @@ export class RankingListQueryDto {
   @IsEnum(RankingPeriodDto)
   period?: RankingPeriodDto;
 
+  @ApiPropertyOptional({ enum: RankingScopeDto, description: 'Ranking scope (local/global)' })
+  @IsOptional()
+  @IsEnum(RankingScopeDto)
+  scope?: RankingScopeDto;
+
   @ApiPropertyOptional({ description: 'Number of rankings to return', minimum: 1, maximum: 100 })
   @IsOptional()
   @IsNumber()
@@ -73,6 +83,9 @@ export class RankingListResponseDto {
 
   @ApiProperty({ enum: RankingPeriodDto, description: 'Ranking period' })
   period: RankingPeriodDto;
+
+  @ApiProperty({ enum: RankingScopeDto, description: 'Ranking scope' })
+  scope: RankingScopeDto;
 
   @ApiProperty({ description: 'Whether there are more rankings' })
   hasNext: boolean;
@@ -116,14 +129,23 @@ export class RankingStatsResponseDto {
 }
 
 export class LeaderboardResponseDto {
-  @ApiProperty({ description: 'Weekly rankings' })
-  weekly: RankingListResponseDto;
+  @ApiProperty({ description: 'Local weekly rankings' })
+  localWeekly: RankingListResponseDto;
 
-  @ApiProperty({ description: 'Monthly rankings' })
-  monthly: RankingListResponseDto;
+  @ApiProperty({ description: 'Local monthly rankings' })
+  localMonthly: RankingListResponseDto;
 
-  @ApiProperty({ description: 'All-time rankings' })
-  allTime: RankingListResponseDto;
+  @ApiProperty({ description: 'Local all-time rankings' })
+  localAllTime: RankingListResponseDto;
+
+  @ApiProperty({ description: 'Global weekly rankings' })
+  globalWeekly: RankingListResponseDto;
+
+  @ApiProperty({ description: 'Global monthly rankings' })
+  globalMonthly: RankingListResponseDto;
+
+  @ApiProperty({ description: 'Global all-time rankings' })
+  globalAllTime: RankingListResponseDto;
 
   @ApiProperty({ description: 'Current user stats' })
   currentUserStats: CurrentUserRankingDto;

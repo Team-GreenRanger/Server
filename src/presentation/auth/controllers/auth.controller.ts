@@ -28,6 +28,8 @@ export class AuthController {
         name: registerDto.name,
         password: registerDto.password,
         profileImageUrl: registerDto.profileImageUrl,
+        nationality: registerDto.nationality,
+        age: registerDto.age,
       });
 
       return {

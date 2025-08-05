@@ -1,10 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
-import type { IRankingRepository, RankingData } from '../../../domain/ranking/repositories/ranking.repository.interface';
+import type { IRankingRepository, RankingData, RankingQuery } from '../../../domain/ranking/repositories/ranking.repository.interface';
 import { RANKING_REPOSITORY } from '../../../domain/ranking/repositories/ranking.repository.interface';
-import { RankingType } from '../../../domain/ranking/entities/ranking-snapshot.entity';
+import { RankingType, RankingPeriod, RankingScope } from '../../../domain/ranking/entities/ranking-snapshot.entity';
 
 export interface GetCurrentRankingsRequest {
   type: RankingType;
+  period: RankingPeriod;
+  scope: RankingScope;
+  nationality?: string;
   limit?: number;
   offset?: number;
 }
@@ -32,9 +35,18 @@ export class GetCurrentRankingsUseCase {
   ) {}
 
   async execute(request: GetCurrentRankingsRequest): Promise<GetCurrentRankingsResponse> {
-    const { type, limit = 10, offset = 0 } = request;
+    const { type, period, scope, nationality, limit = 10, offset = 0 } = request;
 
-    const result = await this.rankingRepository.getCurrentRankings(type, limit, offset);
+    const query: RankingQuery = {
+      type,
+      period,
+      scope,
+      nationality,
+      limit,
+      offset
+    };
+
+    const result = await this.rankingRepository.getCurrentRankings(query);
 
     const rankings: RankingEntry[] = result.rankings.map((ranking, index) => ({
       rank: offset + index + 1,

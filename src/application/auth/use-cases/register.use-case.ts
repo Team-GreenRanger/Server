@@ -10,6 +10,8 @@ export interface RegisterCommand {
   name: string;
   password: string;
   profileImageUrl?: string;
+  nationality?: string;
+  age?: number;
 }
 
 export interface RegisterResult {
@@ -41,6 +43,8 @@ export class RegisterUseCase {
       name: command.name,
       hashedPassword,
       profileImageUrl: command.profileImageUrl,
+      nationality: command.nationality,
+      age: command.age,
     });
 
     // Save user

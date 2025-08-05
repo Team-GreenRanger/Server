@@ -50,14 +50,23 @@ export class TypeOrmMissionRepository implements IMissionRepository {
   }
 
   async findRandomActiveMissions(count: number): Promise<Mission[]> {
-    const missionEntities = await this.missionRepository
-      .createQueryBuilder('mission')
-      .where('mission.status = :status', { status: MissionStatus.ACTIVE })
-      .orderBy('RAND()', 'ASC')
-      .limit(count)
-      .getMany();
+    // 먼저 모든 ACTIVE 미션을 찾음
+    const missionEntities = await this.missionRepository.find({
+      where: { status: MissionStatusEntity.ACTIVE },
+      order: { createdAt: 'DESC' } // 최신 순으로 정렬
+    });
     
-    return missionEntities.map(entity => this.toDomain(entity));
+    console.log(`Found ${missionEntities.length} active missions`); // 디버깅
+    
+    // 랜덤으로 섮기
+    const shuffled = missionEntities.sort(() => Math.random() - 0.5);
+    
+    // 요청된 수만큼 반환
+    const selected = shuffled.slice(0, count);
+    
+    console.log(`Selected ${selected.length} missions for assignment`); // 디버깅
+    
+    return selected.map(entity => this.toDomain(entity));
   }
 
   async update(id: string, missionData: Partial<Mission>): Promise<Mission> {

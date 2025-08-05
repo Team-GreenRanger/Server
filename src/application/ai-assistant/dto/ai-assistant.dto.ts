@@ -135,3 +135,32 @@ export class EcoEducationContentResponseDto {
   @ApiProperty({ description: 'Generation timestamp' })
   timestamp: Date;
 }
+
+export class TrashSortingDto {
+  @ApiProperty({ description: '이미지 URL', example: 'https://example.com/trash-image.jpg' })
+  @IsUrl()
+  imageUrl: string;
+}
+
+export class TrashSortingResponseDto {
+  @ApiProperty({ description: '감지된 쓰레기 종류', example: 'plastic bottle' })
+  trashType: string;
+
+  @ApiProperty({ description: '분리수거 방법', example: '플라스틱 재활용함에 버리세요' })
+  disposalMethod: string;
+
+  @ApiProperty({ description: '국가별 세부 지침' })
+  countrySpecificGuidelines: string;
+
+  @ApiProperty({ description: '사용자 국가 코드', example: 'KR' })
+  userCountry: string;
+
+  @ApiProperty({ description: '신뢰도 점수 (0-100)', example: 85 })
+  confidence: number;
+
+  @ApiProperty({ description: '추가 팁', type: [String] })
+  additionalTips: string[];
+
+  @ApiProperty({ description: '분석 타임스탬프' })
+  timestamp: Date;
+}

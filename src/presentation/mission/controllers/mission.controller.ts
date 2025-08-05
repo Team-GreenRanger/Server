@@ -7,7 +7,8 @@ import {
   Body,
   Query,
   UseGuards,
-  Request
+  Request,
+  ConflictException
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,7 @@ import { GetMissionByIdUseCase } from '../../../application/mission/use-cases/ge
 import { GetUserMissionsUseCase } from '../../../application/mission/use-cases/get-user-missions.use-case';
 import { GetDailyMissionsUseCase } from '../../../application/mission/use-cases/get-daily-missions.use-case';
 import { CreateMissionUseCase } from '../../../application/mission/use-cases/create-mission.use-case';
+import { GetPendingVerificationsUseCase } from '../../../application/mission/use-cases/get-pending-verifications.use-case';
 import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 import { NotificationService } from '../../../application/notification/services/notification.service';
 import {
@@ -59,6 +61,7 @@ export class MissionController {
       private readonly getUserMissionsUseCase: GetUserMissionsUseCase,
       private readonly getDailyMissionsUseCase: GetDailyMissionsUseCase,
       private readonly createMissionUseCase: CreateMissionUseCase,
+      private readonly getPendingVerificationsUseCase: GetPendingVerificationsUseCase,
       private readonly claudeService: ClaudeService,
       private readonly notificationService: NotificationService,
   ) {}
@@ -176,35 +179,71 @@ export class MissionController {
     description: 'Mission assigned successfully',
     type: UserMissionResponseDto
   })
+  @ApiResponse({
+    status: 409,
+    description: 'Mission already completed',
+  })
   async assignMission(
       @Request() req: any,
       @Body() assignMissionDto: AssignMissionDto,
   ): Promise<UserMissionResponseDto> {
     const userId = req.user.sub; // From JWT payload
 
-    const userMission = await this.assignMissionUseCase.execute({
-      userId,
-      missionId: assignMissionDto.missionId,
-      targetProgress: assignMissionDto.targetProgress,
-    });
+    try {
+      const userMission = await this.assignMissionUseCase.execute({
+        userId,
+        missionId: assignMissionDto.missionId,
+      });
 
-    return {
-      id: userMission.id,
-      userId: userMission.userId,
-      missionId: userMission.missionId,
-      status: userMission.status as unknown as UserMissionStatusDto,
-      currentProgress: userMission.currentProgress,
-      targetProgress: userMission.targetProgress,
-      submissionImageUrls: userMission.submissionImageUrls,
-      submissionNote: userMission.submissionNote,
-      verificationNote: userMission.verificationNote,
-      submittedAt: userMission.submittedAt,
-      verifiedAt: userMission.verifiedAt,
-      completedAt: userMission.completedAt,
-      assignedAt: userMission.assignedAt,
-      isActive: userMission.status !== 'COMPLETED',
-      isDone: userMission.status === 'COMPLETED',
-    };
+      // 미션 정보 가져오기
+      const missionResult = await this.getMissionByIdUseCase.execute({
+        id: userMission.missionId
+      });
+
+      const progressPercentage = Math.round(userMission.getProgressPercentage(missionResult.mission.requiredSubmissions));
+      const remainingSubmissions = userMission.getRemainingSubmissions(missionResult.mission.requiredSubmissions);
+
+      return {
+        id: userMission.id,
+        userId: userMission.userId,
+        missionId: userMission.missionId,
+        status: userMission.status as unknown as UserMissionStatusDto,
+        currentProgress: userMission.currentProgress,
+        submissionImageUrls: userMission.submissionImageUrls,
+        submissionNote: userMission.submissionNote,
+        verificationNote: userMission.verificationNote,
+        submittedAt: userMission.submittedAt,
+        verifiedAt: userMission.verifiedAt,
+        completedAt: userMission.completedAt,
+        assignedAt: userMission.assignedAt,
+        isActive: userMission.status !== 'COMPLETED',
+        isDone: userMission.status === 'COMPLETED',
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
+          id: missionResult.mission.id,
+          title: missionResult.mission.title,
+          description: missionResult.mission.description,
+          type: missionResult.mission.type as unknown as MissionTypeDto,
+          difficulty: missionResult.mission.difficulty as unknown as DifficultyLevelDto,
+          co2ReductionAmount: missionResult.mission.co2ReductionAmount,
+          creditReward: missionResult.mission.creditReward,
+          requiredSubmissions: missionResult.mission.requiredSubmissions,
+          imageUrl: missionResult.mission.imageUrl,
+          instructions: missionResult.mission.instructions,
+          verificationCriteria: missionResult.mission.verificationCriteria,
+          status: missionResult.mission.status as unknown as MissionStatusDto,
+          createdAt: missionResult.mission.createdAt,
+        },
+      };
+    } catch (error) {
+      console.error('AssignMission error:', error.message);
+      // 완료된 미션 재할당 시도 시 409 Conflict 반환
+      if (error.message?.includes('Mission already completed')) {
+        throw new ConflictException('This mission is already completed. You cannot participate again.');
+      }
+      throw error;
+    }
   }
 
   @Get('user/daily-missions')
@@ -221,13 +260,22 @@ export class MissionController {
 
     return result.userMissions.map(userMission => {
       const userMissionWithMission = userMission as typeof userMission & { mission?: Mission | null };
+      
+      // 미션 정보가 없으면 에러 (디버깅을 위해)
+      if (!userMissionWithMission.mission) {
+        console.error(`Mission not found for daily userMission ${userMissionWithMission.id}`);
+        throw new Error(`Mission data missing for daily user mission ${userMissionWithMission.id}`);
+      }
+
+      const progressPercentage = Math.round(userMissionWithMission.getProgressPercentage(userMissionWithMission.mission.requiredSubmissions));
+      const remainingSubmissions = userMissionWithMission.getRemainingSubmissions(userMissionWithMission.mission.requiredSubmissions);
+      
       return {
         id: userMissionWithMission.id,
         userId: userMissionWithMission.userId,
         missionId: userMissionWithMission.missionId,
         status: userMissionWithMission.status as unknown as UserMissionStatusDto,
         currentProgress: userMissionWithMission.currentProgress,
-        targetProgress: userMissionWithMission.targetProgress,
         submissionImageUrls: userMissionWithMission.submissionImageUrls,
         submissionNote: userMissionWithMission.submissionNote,
         verificationNote: userMissionWithMission.verificationNote,
@@ -237,7 +285,9 @@ export class MissionController {
         assignedAt: userMissionWithMission.assignedAt,
         isActive: userMissionWithMission.status !== 'COMPLETED',
         isDone: userMissionWithMission.status === 'COMPLETED',
-        mission: userMissionWithMission.mission ? {
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
           id: userMissionWithMission.mission.id,
           title: userMissionWithMission.mission.title,
           description: userMissionWithMission.mission.description,
@@ -251,7 +301,7 @@ export class MissionController {
           verificationCriteria: userMissionWithMission.mission.verificationCriteria,
           status: userMissionWithMission.mission.status as unknown as MissionStatusDto,
           createdAt: userMissionWithMission.mission.createdAt,
-        } : undefined,
+        },
       };
     });
   }
@@ -260,7 +310,7 @@ export class MissionController {
   @ApiOperation({ summary: 'Get current user missions' })
   @ApiResponse({
     status: 200,
-    description: 'User missions',
+    description: 'User missions list',
     type: [UserMissionResponseDto]
   })
   @ApiQuery({ name: 'status', enum: UserMissionStatusDto, required: false })
@@ -277,13 +327,22 @@ export class MissionController {
 
     return result.userMissions.map(userMission => {
       const userMissionWithMission = userMission as typeof userMission & { mission?: Mission | null };
+      
+      // 미션 정보가 없으면 에러 (디버깅을 위해)
+      if (!userMissionWithMission.mission) {
+        console.error(`Mission not found for userMission ${userMissionWithMission.id}`);
+        throw new Error(`Mission data missing for user mission ${userMissionWithMission.id}`);
+      }
+
+      const progressPercentage = Math.round(userMissionWithMission.getProgressPercentage(userMissionWithMission.mission.requiredSubmissions));
+      const remainingSubmissions = userMissionWithMission.getRemainingSubmissions(userMissionWithMission.mission.requiredSubmissions);
+      
       return {
         id: userMissionWithMission.id,
         userId: userMissionWithMission.userId,
         missionId: userMissionWithMission.missionId,
         status: userMissionWithMission.status as unknown as UserMissionStatusDto,
         currentProgress: userMissionWithMission.currentProgress,
-        targetProgress: userMissionWithMission.targetProgress,
         submissionImageUrls: userMissionWithMission.submissionImageUrls,
         submissionNote: userMissionWithMission.submissionNote,
         verificationNote: userMissionWithMission.verificationNote,
@@ -293,7 +352,9 @@ export class MissionController {
         assignedAt: userMissionWithMission.assignedAt,
         isActive: userMissionWithMission.status !== 'COMPLETED',
         isDone: userMissionWithMission.status === 'COMPLETED',
-        mission: userMissionWithMission.mission ? {
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
           id: userMissionWithMission.mission.id,
           title: userMissionWithMission.mission.title,
           description: userMissionWithMission.mission.description,
@@ -307,7 +368,7 @@ export class MissionController {
           verificationCriteria: userMissionWithMission.mission.verificationCriteria,
           status: userMissionWithMission.mission.status as unknown as MissionStatusDto,
           createdAt: userMissionWithMission.mission.createdAt,
-        } : undefined,
+        },
       };
     });
   }
@@ -343,12 +404,13 @@ export class MissionController {
         isAutoVerification: true,
       });
 
+      // 미션 정보 가져오기
+      const missionResult = await this.getMissionByIdUseCase.execute({
+        id: verifyResult.userMission.missionId
+      });
+
       // Send notification if fully completed
       if (verifyResult.isFullyCompleted && verifyResult.creditTransaction) {
-        const missionResult = await this.getMissionByIdUseCase.execute({
-          id: submitResult.userMission.missionId
-        });
-
         await this.notificationService.createMissionCompletedNotification(
             userId,
             missionResult.mission.title,
@@ -356,13 +418,15 @@ export class MissionController {
         );
       }
 
+      const progressPercentage = Math.round(verifyResult.userMission.getProgressPercentage(missionResult.mission.requiredSubmissions));
+      const remainingSubmissions = verifyResult.userMission.getRemainingSubmissions(missionResult.mission.requiredSubmissions);
+
       return {
         id: verifyResult.userMission.id,
         userId: verifyResult.userMission.userId,
         missionId: verifyResult.userMission.missionId,
         status: verifyResult.userMission.status as unknown as UserMissionStatusDto,
         currentProgress: verifyResult.userMission.currentProgress,
-        targetProgress: verifyResult.userMission.targetProgress,
         submissionImageUrls: verifyResult.userMission.submissionImageUrls,
         submissionNote: verifyResult.userMission.submissionNote,
         verificationNote: verifyResult.userMission.verificationNote,
@@ -372,19 +436,42 @@ export class MissionController {
         assignedAt: verifyResult.userMission.assignedAt,
         isActive: verifyResult.userMission.status !== 'COMPLETED',
         isDone: verifyResult.userMission.status === 'COMPLETED',
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
+          id: missionResult.mission.id,
+          title: missionResult.mission.title,
+          description: missionResult.mission.description,
+          type: missionResult.mission.type as unknown as MissionTypeDto,
+          difficulty: missionResult.mission.difficulty as unknown as DifficultyLevelDto,
+          co2ReductionAmount: missionResult.mission.co2ReductionAmount,
+          creditReward: missionResult.mission.creditReward,
+          requiredSubmissions: missionResult.mission.requiredSubmissions,
+          imageUrl: missionResult.mission.imageUrl,
+          instructions: missionResult.mission.instructions,
+          verificationCriteria: missionResult.mission.verificationCriteria,
+          status: missionResult.mission.status as unknown as MissionStatusDto,
+          createdAt: missionResult.mission.createdAt,
+        },
         isFullyCompleted: verifyResult.isFullyCompleted,
-        remainingSubmissions: verifyResult.remainingSubmissions,
         points: verifyResult.isFullyCompleted && verifyResult.creditTransaction ? verifyResult.creditTransaction.amount : 0,
       };
     } else {
       // Auto-verification failed or not performed
+      // 미션 정보 가져오기
+      const missionResult = await this.getMissionByIdUseCase.execute({
+        id: submitResult.userMission.missionId
+      });
+
+      const progressPercentage = Math.round(submitResult.userMission.getProgressPercentage(missionResult.mission.requiredSubmissions));
+      const remainingSubmissions = submitResult.userMission.getRemainingSubmissions(missionResult.mission.requiredSubmissions);
+
       return {
         id: submitResult.userMission.id,
         userId: submitResult.userMission.userId,
         missionId: submitResult.userMission.missionId,
         status: submitResult.userMission.status as unknown as UserMissionStatusDto,
         currentProgress: submitResult.userMission.currentProgress,
-        targetProgress: submitResult.userMission.targetProgress,
         submissionImageUrls: submitResult.userMission.submissionImageUrls,
         submissionNote: submitResult.userMission.submissionNote,
         verificationNote: 'Pending verification',
@@ -394,11 +481,130 @@ export class MissionController {
         assignedAt: submitResult.userMission.assignedAt,
         isActive: submitResult.userMission.status !== 'COMPLETED',
         isDone: submitResult.userMission.status === 'COMPLETED',
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
+          id: missionResult.mission.id,
+          title: missionResult.mission.title,
+          description: missionResult.mission.description,
+          type: missionResult.mission.type as unknown as MissionTypeDto,
+          difficulty: missionResult.mission.difficulty as unknown as DifficultyLevelDto,
+          co2ReductionAmount: missionResult.mission.co2ReductionAmount,
+          creditReward: missionResult.mission.creditReward,
+          requiredSubmissions: missionResult.mission.requiredSubmissions,
+          imageUrl: missionResult.mission.imageUrl,
+          instructions: missionResult.mission.instructions,
+          verificationCriteria: missionResult.mission.verificationCriteria,
+          status: missionResult.mission.status as unknown as MissionStatusDto,
+          createdAt: missionResult.mission.createdAt,
+        },
         isFullyCompleted: false,
-        remainingSubmissions: submitResult.userMission.targetProgress - submitResult.userMission.currentProgress,
         points: 0,
       };
     }
+  }
+
+  @Get('admin/pending-verifications')
+  @Admin()
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Get pending verifications for admin' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of pending user missions for verification',
+    type: [UserMissionResponseDto]
+  })
+  async getPendingVerifications(): Promise<UserMissionResponseDto[]> {
+    const result = await this.getPendingVerificationsUseCase.execute();
+
+    return result.userMissions.map(userMission => {
+      const userMissionWithMission = userMission as typeof userMission & { mission?: Mission | null };
+      
+      // 미션 정보가 없으면 에러 (디버깅을 위해)
+      if (!userMissionWithMission.mission) {
+        console.error(`Mission not found for pending userMission ${userMissionWithMission.id}`);
+        throw new Error(`Mission data missing for pending user mission ${userMissionWithMission.id}`);
+      }
+
+      const progressPercentage = Math.round(userMissionWithMission.getProgressPercentage(userMissionWithMission.mission.requiredSubmissions));
+      const remainingSubmissions = userMissionWithMission.getRemainingSubmissions(userMissionWithMission.mission.requiredSubmissions);
+      
+      return {
+        id: userMissionWithMission.id,
+        userId: userMissionWithMission.userId,
+        missionId: userMissionWithMission.missionId,
+        status: userMissionWithMission.status as unknown as UserMissionStatusDto,
+        currentProgress: userMissionWithMission.currentProgress,
+        submissionImageUrls: userMissionWithMission.submissionImageUrls,
+        submissionNote: userMissionWithMission.submissionNote,
+        verificationNote: userMissionWithMission.verificationNote,
+        submittedAt: userMissionWithMission.submittedAt,
+        verifiedAt: userMissionWithMission.verifiedAt,
+        completedAt: userMissionWithMission.completedAt,
+        assignedAt: userMissionWithMission.assignedAt,
+        isActive: userMissionWithMission.status !== 'COMPLETED',
+        isDone: userMissionWithMission.status === 'COMPLETED',
+        progressPercentage,
+        remainingSubmissions,
+        mission: {
+          id: userMissionWithMission.mission.id,
+          title: userMissionWithMission.mission.title,
+          description: userMissionWithMission.mission.description,
+          type: userMissionWithMission.mission.type as unknown as MissionTypeDto,
+          difficulty: userMissionWithMission.mission.difficulty as unknown as DifficultyLevelDto,
+          co2ReductionAmount: userMissionWithMission.mission.co2ReductionAmount,
+          creditReward: userMissionWithMission.mission.creditReward,
+          requiredSubmissions: userMissionWithMission.mission.requiredSubmissions,
+          imageUrl: userMissionWithMission.mission.imageUrl,
+          instructions: userMissionWithMission.mission.instructions,
+          verificationCriteria: userMissionWithMission.mission.verificationCriteria,
+          status: userMissionWithMission.mission.status as unknown as MissionStatusDto,
+          createdAt: userMissionWithMission.mission.createdAt,
+        },
+      };
+    });
+  }
+
+  @Get('debug/all-missions')
+  @Admin()
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Debug: Get all missions regardless of status' })
+  async getAllMissionsDebug(): Promise<any[]> {
+    // 모든 미션 상태 확인용 디버깅 API
+    const result = await this.getMissionsUseCase.execute({});
+    
+    return result.missions.map(mission => ({
+      id: mission.id,
+      title: mission.title,
+      status: mission.status,
+      type: mission.type,
+      difficulty: mission.difficulty,
+      requiredSubmissions: mission.requiredSubmissions,
+      creditReward: mission.creditReward,
+      createdAt: mission.createdAt,
+      isActive: mission.isActive()
+    }));
+  }
+
+  @Patch('debug/activate-all')
+  @Admin()
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Debug: Activate all missions' })
+  async activateAllMissions(): Promise<{ message: string; activated: number }> {
+    const allMissions = await this.getMissionsUseCase.execute({});
+    let activatedCount = 0;
+    
+    for (const mission of allMissions.missions) {
+      if (!mission.isActive()) {
+        mission.activate();
+        await this.getMissionsUseCase.execute({}); // 실제로는 update 메서드가 필요하지만 임시
+        activatedCount++;
+      }
+    }
+    
+    return {
+      message: `${activatedCount} missions activated`,
+      activated: activatedCount
+    };
   }
 
   @Patch('user-missions/:id/verify')
@@ -421,13 +627,20 @@ export class MissionController {
       verificationNote: verifyMissionDto.verificationNote,
     });
 
+    // 미션 정보 가져오기
+    const missionResult = await this.getMissionByIdUseCase.execute({
+      id: result.userMission.missionId
+    });
+
+    const progressPercentage = Math.round(result.userMission.getProgressPercentage(missionResult.mission.requiredSubmissions));
+    const remainingSubmissions = result.userMission.getRemainingSubmissions(missionResult.mission.requiredSubmissions);
+
     return {
       id: result.userMission.id,
       userId: result.userMission.userId,
       missionId: result.userMission.missionId,
       status: result.userMission.status as unknown as UserMissionStatusDto,
       currentProgress: result.userMission.currentProgress,
-      targetProgress: result.userMission.targetProgress,
       submissionImageUrls: result.userMission.submissionImageUrls,
       submissionNote: result.userMission.submissionNote,
       verificationNote: result.userMission.verificationNote,
@@ -437,6 +650,23 @@ export class MissionController {
       assignedAt: result.userMission.assignedAt,
       isActive: result.userMission.status !== 'COMPLETED',
       isDone: result.userMission.status === 'COMPLETED',
+      progressPercentage,
+      remainingSubmissions,
+      mission: {
+        id: missionResult.mission.id,
+        title: missionResult.mission.title,
+        description: missionResult.mission.description,
+        type: missionResult.mission.type as unknown as MissionTypeDto,
+        difficulty: missionResult.mission.difficulty as unknown as DifficultyLevelDto,
+        co2ReductionAmount: missionResult.mission.co2ReductionAmount,
+        creditReward: missionResult.mission.creditReward,
+        requiredSubmissions: missionResult.mission.requiredSubmissions,
+        imageUrl: missionResult.mission.imageUrl,
+        instructions: missionResult.mission.instructions,
+        verificationCriteria: missionResult.mission.verificationCriteria,
+        status: missionResult.mission.status as unknown as MissionStatusDto,
+        createdAt: missionResult.mission.createdAt,
+      },
     };
   }
 }

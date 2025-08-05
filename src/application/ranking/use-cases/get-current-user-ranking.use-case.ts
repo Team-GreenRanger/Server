@@ -1,11 +1,13 @@
 import { Injectable, Inject } from '@nestjs/common';
-import type { IRankingRepository } from '../../../domain/ranking/repositories/ranking.repository.interface';
+import type { IRankingRepository, RankingQuery } from '../../../domain/ranking/repositories/ranking.repository.interface';
 import { RANKING_REPOSITORY } from '../../../domain/ranking/repositories/ranking.repository.interface';
-import { RankingType } from '../../../domain/ranking/entities/ranking-snapshot.entity';
+import { RankingType, RankingPeriod, RankingScope } from '../../../domain/ranking/entities/ranking-snapshot.entity';
 
 export interface GetCurrentUserRankingRequest {
   userId: string;
   type: RankingType;
+  period: RankingPeriod;
+  scope: RankingScope;
 }
 
 export interface GetCurrentUserRankingResponse {
@@ -25,15 +27,14 @@ export class GetCurrentUserRankingUseCase {
   ) {}
 
   async execute(request: GetCurrentUserRankingRequest): Promise<GetCurrentUserRankingResponse> {
-    const { userId, type } = request;
+    const { userId, type, period, scope } = request;
 
-    const currentRanking = await this.rankingRepository.getUserCurrentRanking(userId, type);
+    const currentRanking = await this.rankingRepository.getUserCurrentRanking(userId, type, period, scope);
     
-    // 랭킹 기록이 없는 사용자도 0으로 처리
     if (!currentRanking) {
       return {
-        currentRank: 0, // 랭킹 없음
-        currentScore: 0, // 점수 0
+        currentRank: 0,
+        currentScore: 0,
         previousRank: 0,
         rankChange: 0,
         scoreToNextRank: undefined,
@@ -45,11 +46,15 @@ export class GetCurrentUserRankingUseCase {
     let nextRankPosition: number | undefined;
 
     if (currentRanking.rank > 1) {
-      const nextRankResult = await this.rankingRepository.getCurrentRankings(
-        type, 
-        1, 
-        currentRanking.rank - 2
-      );
+      const nextRankQuery: RankingQuery = {
+        type,
+        period,
+        scope,
+        limit: 1,
+        offset: currentRanking.rank - 2
+      };
+
+      const nextRankResult = await this.rankingRepository.getCurrentRankings(nextRankQuery);
 
       if (nextRankResult.rankings.length > 0) {
         const nextRankUser = nextRankResult.rankings[0];
@@ -62,7 +67,14 @@ export class GetCurrentUserRankingUseCase {
     let rankChange: number | undefined;
 
     try {
-      const allRankings = await this.rankingRepository.getCurrentRankings(type, 100);
+      const allRankingsQuery: RankingQuery = {
+        type,
+        period,
+        scope,
+        limit: 100
+      };
+      
+      const allRankings = await this.rankingRepository.getCurrentRankings(allRankingsQuery);
       const userIndex = allRankings.rankings.findIndex(r => r.userId === userId);
       
       if (userIndex !== -1) {

@@ -38,10 +38,9 @@ export class GetUserMissionsUseCase {
     const userMissionsWithDetails = await Promise.all(
       userMissions.map(async (userMission) => {
         const mission = await this.missionRepository.findById(userMission.missionId);
-        return {
-          ...userMission,
-          mission
-        } as UserMission & { mission?: Mission | null };
+        // 도메인 엔티티의 메서드를 보존하기 위해 직접 프로퍼티 할당
+        (userMission as any).mission = mission;
+        return userMission as UserMission & { mission?: Mission | null };
       })
     );
 
