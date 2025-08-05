@@ -6,9 +6,14 @@ import { ClaudeService } from '../../infrastructure/external-apis/claude/claude.
 import { SeoulBikeService } from '../../infrastructure/external-apis/seoul-bike/seoul-bike.service';
 import { NotificationService } from '../../application/notification/services/notification.service';
 import { FileStorageService } from '../../infrastructure/file-storage/file-storage.service';
+import { RoutingService } from '../../application/routing/services/routing.service';
 import { NotificationEntity } from '../../infrastructure/database/entities/notification.entity';
 import { BikeNetworkEntity } from '../../infrastructure/database/entities/bike-network.entity';
 import { BikeStationEntity } from '../../infrastructure/database/entities/bike-station.entity';
+import { RoutingSessionEntity } from '../../infrastructure/database/entities/routing-session.entity';
+import { CarbonSavingsEntity } from '../../infrastructure/database/entities/carbon-savings.entity';
+import { UserEntity } from '../../infrastructure/database/entities/user.entity';
+import { CarbonCreditEntity } from '../../infrastructure/database/entities/carbon-credit.entity';
 import { TypeOrmNotificationRepository } from '../../infrastructure/database/repositories/typeorm-notification.repository';
 import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/notification.repository.interface';
 
@@ -16,7 +21,15 @@ import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([NotificationEntity, BikeNetworkEntity, BikeStationEntity]),
+    TypeOrmModule.forFeature([
+      NotificationEntity, 
+      BikeNetworkEntity, 
+      BikeStationEntity,
+      RoutingSessionEntity,
+      CarbonSavingsEntity,
+      UserEntity,
+      CarbonCreditEntity,
+    ]),
   ],
   providers: [
     GeminiService,
@@ -24,6 +37,7 @@ import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/
     SeoulBikeService,
     NotificationService,
     FileStorageService,
+    RoutingService,
     {
       provide: NOTIFICATION_REPOSITORY,
       useClass: TypeOrmNotificationRepository,
@@ -35,6 +49,7 @@ import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/
     SeoulBikeService,
     NotificationService,
     FileStorageService,
+    RoutingService,
   ],
 })
 export class SharedServicesModule {}

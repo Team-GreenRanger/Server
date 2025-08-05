@@ -592,4 +592,84 @@ Make it:
       throw error;
     }
   }
+
+  // 쓰레기 분류를 위한 이미지+텍스트 분석 메소드
+  async analyzeImageWithText(imageUrl: string, analysisPrompt: string): Promise<string> {
+    console.log('=== CLAUDE IMAGE TEXT ANALYSIS START ===');
+    console.log('Image URL:', imageUrl);
+    console.log('Analysis prompt length:', analysisPrompt.length);
+    
+    if (!this.apiKey) {
+      console.error('CRITICAL: Claude API key not configured');
+      throw new Error('Claude API key not configured');
+    }
+
+    try {
+      console.log('Fetching image as base64...');
+      const imageBase64 = await this.fetchImageAsBase64(imageUrl);
+      console.log('Image fetched successfully, base64 length:', imageBase64.length);
+      
+      const payload = {
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: analysisPrompt
+              },
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/jpeg',
+                  data: imageBase64
+                }
+              }
+            ]
+          }
+        ]
+      };
+
+      console.log('Making request to Claude API for image text analysis...');
+      const response = await fetch(`${this.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Claude API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Claude API ERROR RESPONSE:', errorData);
+        throw new Error(`Claude API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Claude API SUCCESS RESPONSE');
+      
+      if (!data.content || data.content.length === 0) {
+        console.error('CRITICAL: No content returned from Claude API');
+        throw new Error('No content returned from Claude API');
+      }
+
+      const responseText = data.content[0].text;
+      console.log('Claude response text length:', responseText.length);
+      console.log('=== CLAUDE IMAGE TEXT ANALYSIS SUCCESS ===');
+      
+      return responseText;
+    } catch (error) {
+      console.error('=== CLAUDE IMAGE TEXT ANALYSIS ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error analyzing image with text:', error);
+      throw error;
+    }
+  }
 }

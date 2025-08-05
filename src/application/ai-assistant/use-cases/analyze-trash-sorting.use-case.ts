@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { IUserRepository } from '../../../domain/user/repositories/user.repository.interface';
+import type { IUserRepository } from '../../../domain/user/repositories/user.repository.interface';
 import { USER_REPOSITORY } from '../../../domain/user/repositories/user.repository.interface';
-import { GeminiService } from '../../../infrastructure/external-apis/gemini/gemini.service';
+import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 
 export interface TrashSortingRequest {
   userId: string;
@@ -23,7 +23,7 @@ export class AnalyzeTrashSortingUseCase {
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: IUserRepository,
-    private readonly geminiService: GeminiService,
+    private readonly claudeService: ClaudeService,
   ) {}
 
   async execute(request: TrashSortingRequest): Promise<TrashSortingResult> {
@@ -39,8 +39,8 @@ export class AnalyzeTrashSortingUseCase {
     // 국가별 쓰레기 분리수거 규정 정보
     const countryGuidelines = this.getCountrySpecificGuidelines(userCountry);
     
-    // AI를 통한 쓰레기 분석
-    const analysis = await this.analyzeTrashWithAI(request.imageUrl, userCountry, countryGuidelines);
+    // Claude AI를 통한 쓰레기 분석
+    const analysis = await this.analyzeTrashWithClaude(request.imageUrl, userCountry, countryGuidelines);
     
     return {
       trashType: analysis.trashType,
@@ -60,20 +60,23 @@ export class AnalyzeTrashSortingUseCase {
       - 종이: 테이프, 스테이플러 등 제거 후 종이류 수거함  
       - 캔/금속: 내용물 비우고 캔류 수거함
       - 유리: 뚜껑 분리 후 유리병 수거함
-      - 일반쓰레기: 종량제봉투 사용`,
+      - 일반쓰레기: 종량제봉투 사용
+      - 음식물쓰레기: 물기 제거 후 음식물쓰레기통`,
       
       'US': `US Recycling Guidelines:
       - Plastic: Remove caps, rinse containers, check recycling number
       - Paper: Remove staples, separate by type (cardboard, mixed paper)
       - Metal: Rinse cans and containers
       - Glass: Remove lids, separate by color in some areas
-      - General waste: Regular trash bags`,
+      - General waste: Regular trash bags
+      - Organic waste: Compost bins where available`,
       
       'JP': `日本のゴミ分別ルール:
       - プラスチック: 内容物を空にして洗浄、プラマーク確認
       - 紙類: ホッチキス等除去、資源ゴミへ
       - 缶類: 中身を空にして缶・ビン・ペットボトルへ
-      - 生ゴミ: 燃えるゴミの日に出す`,
+      - 生ゴミ: 燃えるゴミの日に出す
+      - 不燃ゴミ: 決められた収集日に`,
       
       'DE': `Deutsche Mülltrennung:
       - Gelber Sack: Verpackungen aus Kunststoff, Metall
@@ -86,7 +89,7 @@ export class AnalyzeTrashSortingUseCase {
     return guidelines[countryCode] || guidelines['KR']; // 기본값은 한국
   }
 
-  private async analyzeTrashWithAI(imageUrl: string, userCountry: string, guidelines: string): Promise<{
+  private async analyzeTrashWithClaude(imageUrl: string, userCountry: string, guidelines: string): Promise<{
     trashType: string;
     disposalMethod: string;
     countrySpecificGuidelines: string;
@@ -94,13 +97,42 @@ export class AnalyzeTrashSortingUseCase {
     additionalTips: string[];
   }> {
     try {
-      const responseMessage = await this.geminiService.analyzeTrashImage(imageUrl, userCountry, guidelines);
+      // Claude에게 보낼 프롬프트 구성
+      const analysisPrompt = `이미지를 분석하여 쓰레기의 종류와 올바른 분리수거 방법을 알려주세요.
+
+사용자 국가: ${userCountry}
+해당 국가 분리수거 규정:
+${guidelines}
+
+다음 JSON 형식으로 정확히 응답해주세요:
+{
+  "trashType": "쓰레기 종류 (예: 플라스틱병, 종이상자, 캔 등)",
+  "disposalMethod": "구체적인 버리는 방법",
+  "countrySpecificGuidelines": "해당 국가의 특별한 규정이나 주의사항",
+  "confidence": 신뢰도_숫자_0부터_100,
+  "additionalTips": ["추가 팁1", "추가 팁2"]
+}
+
+중요한 점:
+- 이미지에서 보이는 물체를 정확히 식별하세요
+- 해당 국가의 분리수거 규정에 맞춰 설명하세요
+- 확실하지 않다면 confidence를 낮게 설정하세요
+- 실용적이고 구체적인 조언을 제공하세요`;
+
+      const responseMessage = await this.claudeService.analyzeImageWithText(imageUrl, analysisPrompt);
       
       // JSON 파싱 시도
       let analysisResult;
       try {
-        analysisResult = JSON.parse(responseMessage);
+        // Claude 응답에서 JSON 부분만 추출
+        const jsonMatch = responseMessage.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysisResult = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('JSON not found in response');
+        }
       } catch (parseError) {
+        console.error('Claude 응답 파싱 실패:', parseError);
         // JSON 파싱 실패시 기본값 반환
         analysisResult = {
           trashType: '일반 쓰레기',
@@ -120,7 +152,8 @@ export class AnalyzeTrashSortingUseCase {
       };
       
     } catch (error) {
-      // AI 서비스 오류시 기본 응답
+      console.error('Claude 쓰레기 분석 실패:', error);
+      // Claude 서비스 오류시 기본 응답
       return {
         trashType: '분석 실패',
         disposalMethod: '일반쓰레기로 분류하거나 전문가에게 문의하세요',

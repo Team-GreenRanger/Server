@@ -1,1 +1,344 @@
-import { Injectable, Logger } from '@nestjs/common';\nimport { ConfigService } from '@nestjs/config';\nimport { Repository } from 'typeorm';\nimport { InjectRepository } from '@nestjs/typeorm';\nimport { BikeNetworkEntity } from '../../database/entities/bike-network.entity';\nimport { BikeStationEntity } from '../../database/entities/bike-station.entity';\nimport { v4 as uuidv4 } from 'uuid';\n\nexport interface SeoulBikeStationResponse {\n  stationInfo: {\n    list_total_count: string;\n    RESULT: {\n      CODE: string;\n      MESSAGE: string;\n    };\n    row: Array<{\n      STA_LOC: string;      // 구역 (마포구, 광진구 등)\n      RENT_ID: string;      // 스테이션 ID (ST-10, ST-100 등)\n      RENT_NO: string;      // 스테이션 번호 (00108, 00503 등)\n      RENT_NM: string;      // 스테이션 이름 (서교동 사거리 등)\n      RENT_ID_NM: string;   // 전체 이름 (108. 서교동 사거리)\n      HOLD_NUM: string;     // 보관소 수용량\n      STA_ADD1: string;     // 주소1\n      STA_ADD2: string;     // 주소2\n      STA_LAT: string;      // 위도\n      STA_LONG: string;     // 경도\n      START_INDEX: number;\n      END_INDEX: number;\n      RNUM: string;\n    }>;\n  };\n}\n\n@Injectable()\nexport class SeoulBikeService {\n  private readonly logger = new Logger(SeoulBikeService.name);\n  private readonly seoulApiUrl = 'http://openapi.seoul.go.kr:8088/54656d66416976693938486a556373/json/tbCycleStationInfo/0/999';\n  private readonly seoulNetworkId = '11111111-1111-4111-9111-000000000001';\n\n  constructor(\n    private configService: ConfigService,\n    @InjectRepository(BikeNetworkEntity)\n    private readonly bikeNetworkRepository: Repository<BikeNetworkEntity>,\n    @InjectRepository(BikeStationEntity)\n    private readonly bikeStationRepository: Repository<BikeStationEntity>,\n  ) {}\n\n  async syncSeoulBikeStations(): Promise<void> {\n    this.logger.log('시작: 서울시 따릉이 스테이션 동기화');\n    \n    try {\n      // 1. 서울 따릉이 네트워크 생성/확인\n      await this.ensureSeoulNetwork();\n      \n      // 2. 서울시 API에서 데이터 가져오기\n      const stationsData = await this.fetchSeoulStations();\n      \n      if (!stationsData || !stationsData.stationInfo || !stationsData.stationInfo.row) {\n        this.logger.error('서울시 API에서 유효하지 않은 데이터 수신');\n        return;\n      }\n\n      const stations = stationsData.stationInfo.row;\n      this.logger.log(`가져온 스테이션 수: ${stations.length}`);\n      \n      // 3. 배치로 스테이션 데이터 업데이트\n      await this.updateStationsInBatch(stations);\n      \n      this.logger.log(`완료: ${stations.length}개 스테이션 동기화 완료`);\n      \n    } catch (error) {\n      this.logger.error('서울시 따릉이 스테이션 동기화 실패:', error);\n      throw error;\n    }\n  }\n\n  private async ensureSeoulNetwork(): Promise<void> {\n    // 서울 따릉이 네트워크가 있는지 확인\n    let network = await this.bikeNetworkRepository.findOne({\n      where: { id: this.seoulNetworkId }\n    });\n\n    if (!network) {\n      // 네트워크가 없으면 생성\n      network = this.bikeNetworkRepository.create({\n        id: this.seoulNetworkId,\n        externalId: 'seoul_ddarung',\n        name: 'seoul_ddarung_bike',\n        latitude: 37.5665, // 서울시 중심좌표\n        longitude: 126.9780,\n        city: 'Seoul',\n        country: 'KR',\n        companies: ['서울시'],\n        system: 'Seoul Bike Sharing',\n        source: 'Seoul Open Data API',\n        ebikes: false,\n      });\n      \n      await this.bikeNetworkRepository.save(network);\n      this.logger.log('서울 따릉이 네트워크 생성 완료');\n    } else {\n      this.logger.log('서울 따릉이 네트워크 이미 존재');\n    }\n  }\n\n  private async fetchSeoulStations(): Promise<SeoulBikeStationResponse> {\n    this.logger.log('서울시 API 호출 시작');\n    \n    try {\n      const response = await fetch(this.seoulApiUrl, {\n        method: 'GET',\n        headers: {\n          'Accept': 'application/json',\n          'User-Agent': 'EcoLife-Server/1.0'\n        },\n      });\n\n      if (!response.ok) {\n        throw new Error(`서울시 API 오류: ${response.status} ${response.statusText}`);\n      }\n\n      const data = await response.json();\n      \n      // API 응답 상태 확인\n      if (data.stationInfo?.RESULT?.CODE !== 'INFO-000') {\n        throw new Error(`서울시 API 결과 오류: ${data.stationInfo?.RESULT?.MESSAGE}`);\n      }\n\n      this.logger.log(`서울시 API 호출 성공: ${data.stationInfo.list_total_count}개 스테이션`);\n      return data;\n      \n    } catch (error) {\n      this.logger.error('서울시 API 호출 실패:', error);\n      throw error;\n    }\n  }\n\n  private async updateStationsInBatch(stations: SeoulBikeStationResponse['stationInfo']['row']): Promise<void> {\n    const batchSize = 100; // 한 번에 처리할 스테이션 수\n    \n    for (let i = 0; i < stations.length; i += batchSize) {\n      const batch = stations.slice(i, i + batchSize);\n      await this.processBatch(batch);\n      this.logger.log(`배치 ${Math.floor(i / batchSize) + 1}/${Math.ceil(stations.length / batchSize)} 처리 완료`);\n    }\n  }\n\n  private async processBatch(stations: SeoulBikeStationResponse['stationInfo']['row']): Promise<void> {\n    const stationEntities: Partial<BikeStationEntity>[] = [];\n    \n    for (const station of stations) {\n      try {\n        const stationEntity = await this.mapSeoulStationToEntity(station);\n        stationEntities.push(stationEntity);\n      } catch (error) {\n        this.logger.warn(`스테이션 ${station.RENT_ID} 매핑 실패: ${error.message}`);\n      }\n    }\n\n    if (stationEntities.length > 0) {\n      // upsert: 존재하면 업데이트, 없으면 삽입\n      await this.bikeStationRepository.upsert(stationEntities, {\n        conflictPaths: ['networkId', 'externalId'],\n        skipUpdateIfNoValuesChanged: true,\n      });\n    }\n  }\n\n  private async mapSeoulStationToEntity(station: SeoulBikeStationResponse['stationInfo']['row'][0]): Promise<Partial<BikeStationEntity>> {\n    // 기존 스테이션 찾기 (업데이트용)\n    const existingStation = await this.bikeStationRepository.findOne({\n      where: {\n        networkId: this.seoulNetworkId,\n        externalId: station.RENT_ID\n      }\n    });\n\n    const latitude = parseFloat(station.STA_LAT);\n    const longitude = parseFloat(station.STA_LONG);\n    const totalSlots = parseInt(station.HOLD_NUM, 10);\n\n    // 위도/경도 유효성 검사\n    if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {\n      throw new Error(`유효하지 않은 좌표: lat=${station.STA_LAT}, lng=${station.STA_LONG}`);\n    }\n\n    // 용량 유효성 검사\n    if (isNaN(totalSlots) || totalSlots <= 0) {\n      throw new Error(`유효하지 않은 용량: ${station.HOLD_NUM}`);\n    }\n\n    const address = `${station.STA_ADD1}${station.STA_ADD2 ? ' ' + station.STA_ADD2 : ''}`.trim();\n\n    return {\n      id: existingStation?.id || uuidv4(),\n      networkId: this.seoulNetworkId,\n      externalId: station.RENT_ID,\n      name: station.RENT_NM,\n      latitude,\n      longitude,\n      totalSlots,\n      address: address || undefined,\n      \n      // 서울시 API에는 없는 실시간 데이터는 기본값으로 설정\n      freeBikes: existingStation?.freeBikes || 0,\n      emptySlots: existingStation?.emptySlots || 0,\n      \n      // 기본 설정값들\n      paymentMethods: [],\n      hasPaymentTerminal: false,\n      altitude: 0,\n      isVirtual: false,\n      isRenting: true,\n      isReturning: true,\n      lastUpdated: new Date(),\n    };\n  }\n\n  async getStationCount(): Promise<number> {\n    return await this.bikeStationRepository.count({\n      where: { networkId: this.seoulNetworkId }\n    });\n  }\n\n  async getNetworkInfo(): Promise<BikeNetworkEntity | null> {\n    return await this.bikeNetworkRepository.findOne({\n      where: { id: this.seoulNetworkId },\n      relations: ['stations']\n    });\n  }\n\n  async hasInitialData(): Promise<boolean> {\n    const count = await this.getStationCount();\n    return count > 0;\n  }\n}\n
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { BikeNetworkEntity } from '../../database/entities/bike-network.entity';
+import { BikeStationEntity } from '../../database/entities/bike-station.entity';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface SeoulBikeStationResponse {
+  stationInfo: {
+    list_total_count: string;
+    RESULT: {
+      CODE: string;
+      MESSAGE: string;
+    };
+    row: Array<{
+      STA_LOC: string;      // 구역 (마포구, 광진구 등)
+      RENT_ID: string;      // 스테이션 ID (ST-10, ST-100 등)
+      RENT_NO: string;      // 스테이션 번호 (00108, 00503 등)
+      RENT_NM: string;      // 스테이션 이름 (서교동 사거리 등)
+      RENT_ID_NM: string;   // 전체 이름 (108. 서교동 사거리)
+      HOLD_NUM: string;     // 보관소 수용량
+      STA_ADD1: string;     // 주소1
+      STA_ADD2: string;     // 주소2
+      STA_LAT: string;      // 위도
+      STA_LONG: string;     // 경도
+      START_INDEX: number;
+      END_INDEX: number;
+      RNUM: string;
+    }>;
+  };
+}
+
+@Injectable()
+export class SeoulBikeService {
+  private readonly logger = new Logger(SeoulBikeService.name);
+  private readonly seoulApiUrl = 'http://openapi.seoul.go.kr:8088/54656d66416976693938486a556373/json/tbCycleStationInfo/0/999';
+  private readonly seoulNetworkId = '11111111-1111-4111-9111-000000000001';
+
+  constructor(
+    private configService: ConfigService,
+    @InjectRepository(BikeNetworkEntity)
+    private readonly bikeNetworkRepository: Repository<BikeNetworkEntity>,
+    @InjectRepository(BikeStationEntity)
+    private readonly bikeStationRepository: Repository<BikeStationEntity>,
+  ) {}
+
+  async syncSeoulBikeStations(): Promise<void> {
+    this.logger.log('시작: 서울시 따릉이 스테이션 동기화');
+    
+    try {
+      // 1. 서울 따릉이 네트워크 생성/확인
+      await this.ensureSeoulNetwork();
+      
+      // 2. 서울시 API에서 데이터 가져오기
+      const stationsData = await this.fetchSeoulStations();
+      
+      if (!stationsData || !stationsData.stationInfo || !stationsData.stationInfo.row) {
+        this.logger.error('서울시 API에서 유효하지 않은 데이터 수신');
+        return;
+      }
+
+      const stations = stationsData.stationInfo.row;
+      this.logger.log(`가져온 스테이션 수: ${stations.length}`);
+      
+      // 3. 배치로 스테이션 데이터 업데이트
+      await this.updateStationsInBatch(stations);
+      
+      this.logger.log(`완료: ${stations.length}개 스테이션 동기화 완료`);
+      
+    } catch (error) {
+      this.logger.error('서울시 따릉이 스테이션 동기화 실패:', error);
+      throw error;
+    }
+  }
+
+  private async ensureSeoulNetwork(): Promise<void> {
+    // 서울 따릉이 네트워크가 있는지 확인
+    let network = await this.bikeNetworkRepository.findOne({
+      where: { id: this.seoulNetworkId }
+    });
+
+    if (!network) {
+      // 네트워크가 없으면 생성
+      network = this.bikeNetworkRepository.create({
+        id: this.seoulNetworkId,
+        externalId: 'seoul_ddarung',
+        name: 'seoul_ddarung_bike',
+        latitude: 37.5665, // 서울시 중심좌표
+        longitude: 126.9780,
+        city: 'Seoul',
+        country: 'KR',
+        companies: ['서울시'],
+        system: 'Seoul Bike Sharing',
+        source: 'Seoul Open Data API',
+        ebikes: false,
+      });
+      
+      await this.bikeNetworkRepository.save(network);
+      this.logger.log('서울 따릉이 네트워크 생성 완료');
+    } else {
+      this.logger.log('서울 따릉이 네트워크 이미 존재');
+    }
+  }
+
+  private async fetchSeoulStations(): Promise<SeoulBikeStationResponse> {
+    this.logger.log('서울시 API 호출 시작');
+    
+    try {
+      const response = await fetch(this.seoulApiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'EcoLife-Server/1.0'
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`서울시 API 오류: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // API 응답 상태 확인
+      if (data.stationInfo?.RESULT?.CODE !== 'INFO-000') {
+        throw new Error(`서울시 API 결과 오류: ${data.stationInfo?.RESULT?.MESSAGE}`);
+      }
+
+      this.logger.log(`서울시 API 호출 성공: ${data.stationInfo.list_total_count}개 스테이션`);
+      return data;
+      
+    } catch (error) {
+      this.logger.error('서울시 API 호출 실패:', error);
+      throw error;
+    }
+  }
+
+  private async updateStationsInBatch(stations: SeoulBikeStationResponse['stationInfo']['row']): Promise<void> {
+    const batchSize = 100; // 한 번에 처리할 스테이션 수
+    
+    for (let i = 0; i < stations.length; i += batchSize) {
+      const batch = stations.slice(i, i + batchSize);
+      await this.processBatch(batch);
+      this.logger.log(`배치 ${Math.floor(i / batchSize) + 1}/${Math.ceil(stations.length / batchSize)} 처리 완료`);
+    }
+  }
+
+  private async processBatch(stations: SeoulBikeStationResponse['stationInfo']['row']): Promise<void> {
+    const stationEntities: Partial<BikeStationEntity>[] = [];
+    
+    for (const station of stations) {
+      try {
+        const stationEntity = await this.mapSeoulStationToEntity(station);
+        stationEntities.push(stationEntity);
+      } catch (error) {
+        this.logger.warn(`스테이션 ${station.RENT_ID} 매핑 실패: ${error.message}`);
+      }
+    }
+
+    if (stationEntities.length > 0) {
+      // upsert: 존재하면 업데이트, 없으면 삽입
+      await this.bikeStationRepository.upsert(stationEntities, {
+        conflictPaths: ['networkId', 'externalId'],
+        skipUpdateIfNoValuesChanged: true,
+      });
+    }
+  }
+
+  private async mapSeoulStationToEntity(station: SeoulBikeStationResponse['stationInfo']['row'][0]): Promise<Partial<BikeStationEntity>> {
+    // 기존 스테이션 찾기 (업데이트용)
+    const existingStation = await this.bikeStationRepository.findOne({
+      where: {
+        networkId: this.seoulNetworkId,
+        externalId: station.RENT_ID
+      }
+    });
+
+    const latitude = parseFloat(station.STA_LAT);
+    const longitude = parseFloat(station.STA_LONG);
+    const totalSlots = parseInt(station.HOLD_NUM, 10);
+
+    // 위도/경도 유효성 검사
+    if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+      throw new Error(`유효하지 않은 좌표: lat=${station.STA_LAT}, lng=${station.STA_LONG}`);
+    }
+
+    // 용량 유효성 검사
+    if (isNaN(totalSlots) || totalSlots <= 0) {
+      throw new Error(`유효하지 않은 용량: ${station.HOLD_NUM}`);
+    }
+
+    const address = `${station.STA_ADD1}${station.STA_ADD2 ? ' ' + station.STA_ADD2 : ''}`.trim();
+
+    return {
+      id: existingStation?.id || uuidv4(),
+      networkId: this.seoulNetworkId,
+      externalId: station.RENT_ID,
+      name: station.RENT_NM,
+      latitude,
+      longitude,
+      totalSlots,
+      address: address || undefined,
+      
+      // 서울시 API에는 없는 실시간 데이터는 기본값으로 설정
+      freeBikes: existingStation?.freeBikes || 0,
+      emptySlots: existingStation?.emptySlots || 0,
+      
+      // 기본 설정값들
+      paymentMethods: [],
+      hasPaymentTerminal: false,
+      altitude: 0,
+      isVirtual: false,
+      isRenting: true,
+      isReturning: true,
+      lastUpdated: new Date(),
+    };
+  }
+
+  async getStationCount(): Promise<number> {
+    return await this.bikeStationRepository.count({
+      where: { networkId: this.seoulNetworkId }
+    });
+  }
+
+  async getNetworkInfo(): Promise<BikeNetworkEntity | null> {
+    return await this.bikeNetworkRepository.findOne({
+      where: { id: this.seoulNetworkId },
+      relations: ['stations']
+    });
+  }
+
+  async hasInitialData(): Promise<boolean> {
+    const count = await this.getStationCount();
+    return count > 0;
+  }
+
+  /**
+   * 주변 자전거 스테이션 조회 (반경 내)
+   * Haversine 공식을 사용한 거리 계산
+   */
+  async getNearbyStations(
+    userLatitude: number,
+    userLongitude: number,
+    radiusInMeters: number
+  ): Promise<Array<{
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+    freeBikes: number;
+    emptySlots: number;
+    totalSlots: number;
+    distance: number; // 미터 단위
+    isRenting: boolean;
+    isReturning: boolean;
+    network: {
+      id: string;
+      name: string;
+      city: string;
+    };
+  }>> {
+    try {
+      // 데이터베이스에서 모든 스테이션 조회 (사용 가능한 것만)
+      const allStations = await this.bikeStationRepository.find({
+        where: {
+          isRenting: true, // 대여 가능한 스테이션만
+        },
+        relations: ['network'],
+      });
+
+      // 거리 계산 및 필터링
+      const nearbyStations = allStations
+        .map(station => {
+          const distance = this.calculateDistance(
+            userLatitude,
+            userLongitude,
+            station.latitude,
+            station.longitude
+          );
+
+          return {
+            id: station.id,
+            name: station.name,
+            latitude: station.latitude,
+            longitude: station.longitude,
+            address: station.address,
+            freeBikes: station.freeBikes,
+            emptySlots: station.emptySlots,
+            totalSlots: station.totalSlots,
+            distance: Math.round(distance), // 미터 단위로 반올림
+            isRenting: station.isRenting,
+            isReturning: station.isReturning,
+            network: {
+              id: station.network.id,
+              name: station.network.name,
+              city: station.network.city,
+            },
+          };
+        })
+        .filter(station => station.distance <= radiusInMeters) // 반경 내만 필터링
+        .sort((a, b) => a.distance - b.distance); // 거리순 정렬
+
+      this.logger.log(
+        `주변 스테이션 조회: 위치(${userLatitude}, ${userLongitude}), 반경 ${radiusInMeters}m, 결과 ${nearbyStations.length}개`
+      );
+
+      return nearbyStations;
+    } catch (error) {
+      this.logger.error('주변 스테이션 조회 실패:', error);
+      throw new Error('주변 스테이션 조회에 실패했습니다');
+    }
+  }
+
+  /**
+   * Haversine 공식을 이용한 두 좌표 간 거리 계산 (미터)
+   */
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const R = 6371000; // 지구 반지름 (m)
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLon = this.toRadians(lon2 - lon1);
+    
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    
+    return R * c; // 미터 단위
+  }
+
+  /**
+   * 도를 라디안으로 변환
+   */
+  private toRadians(degrees: number): number {
+    return degrees * (Math.PI / 180);
+  }
+}
