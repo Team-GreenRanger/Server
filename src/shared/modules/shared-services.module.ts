@@ -16,6 +16,10 @@ import { UserEntity } from '../../infrastructure/database/entities/user.entity';
 import { CarbonCreditEntity } from '../../infrastructure/database/entities/carbon-credit.entity';
 import { TypeOrmNotificationRepository } from '../../infrastructure/database/repositories/typeorm-notification.repository';
 import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/notification.repository.interface';
+import { TypeOrmUserRepository } from '../../infrastructure/database/repositories/typeorm-user.repository';
+import { USER_REPOSITORY } from '../../domain/user/repositories/user.repository.interface';
+import { InMemoryEcoTipCacheService } from '../../infrastructure/cache/in-memory-eco-tip-cache.service';
+import { GenerateAgeSpecificEcoTipUseCase } from '../../application/eco-tip/use-cases/generate-age-specific-eco-tip.use-case';
 
 @Global()
 @Module({
@@ -38,9 +42,15 @@ import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/
     NotificationService,
     FileStorageService,
     RoutingService,
+    InMemoryEcoTipCacheService,
+    GenerateAgeSpecificEcoTipUseCase,
     {
       provide: NOTIFICATION_REPOSITORY,
       useClass: TypeOrmNotificationRepository,
+    },
+    {
+      provide: USER_REPOSITORY,
+      useClass: TypeOrmUserRepository,
     },
   ],
   exports: [
@@ -50,6 +60,8 @@ import { NOTIFICATION_REPOSITORY } from '../../domain/notification/repositories/
     NotificationService,
     FileStorageService,
     RoutingService,
+    InMemoryEcoTipCacheService,
+    GenerateAgeSpecificEcoTipUseCase,
   ],
 })
 export class SharedServicesModule {}

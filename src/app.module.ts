@@ -19,6 +19,8 @@ import { MissionEntity } from './infrastructure/database/entities/mission.entity
 import { UserMissionEntity } from './infrastructure/database/entities/user-mission.entity';
 import { BikeNetworkEntity } from './infrastructure/database/entities/bike-network.entity';
 import { BikeStationEntity } from './infrastructure/database/entities/bike-station.entity';
+import { RoutingSessionEntity } from './infrastructure/database/entities/routing-session.entity';
+import { CarbonSavingsEntity } from './infrastructure/database/entities/carbon-savings.entity';
 
 // Infrastructure Services (moved to SharedServicesModule)
 // Repository implementations
@@ -75,6 +77,10 @@ import { InitialAdminSetupService } from './shared/utils/initial-admin-setup.ser
 // Scheduler Services
 import { BikeNetworkSchedulerService } from './infrastructure/scheduler/bike-network-scheduler.service';
 
+// Bike Services
+import { SeoulBikeService } from './infrastructure/external-apis/seoul-bike/seoul-bike.service';
+import { RoutingService } from './application/routing/services/routing.service';
+
 @Module({
   imports: [
     // Configuration
@@ -105,6 +111,8 @@ import { BikeNetworkSchedulerService } from './infrastructure/scheduler/bike-net
       UserMissionEntity,
       BikeNetworkEntity,
       BikeStationEntity,
+      RoutingSessionEntity,
+      CarbonSavingsEntity,
     ]),
 
     // JWT
@@ -156,6 +164,7 @@ import { BikeNetworkSchedulerService } from './infrastructure/scheduler/bike-net
     UserController,
     RankingController,
     RewardController,
+    BikeController,
   ],
   providers: [
     // Repository implementations
@@ -206,12 +215,10 @@ import { BikeNetworkSchedulerService } from './infrastructure/scheduler/bike-net
     CreateRewardUseCase,
     UpdateRewardUseCase,
     DeleteRewardUseCase,
-    
-    // Initial Setup Service - 서버 시작 시 관리자 계정 생성
     InitialAdminSetupService,
-    
-    // Scheduler Services
     BikeNetworkSchedulerService,
+    SeoulBikeService,
+    RoutingService,
   ],
 })
 export class AppModule {}

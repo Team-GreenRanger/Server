@@ -12,6 +12,8 @@ import { EcoLocationEntity } from './entities/eco-location.entity';
 import { AiConversationEntity, AiMessageEntity } from './entities/ai-conversation.entity';
 import { BikeNetworkEntity } from './entities/bike-network.entity';
 import { BikeStationEntity } from './entities/bike-station.entity';
+import { RoutingSessionEntity } from './entities/routing-session.entity';
+import { CarbonSavingsEntity } from './entities/carbon-savings.entity';
 
 export const createDataSource = (configService: ConfigService) => {
   return new DataSource({
@@ -35,6 +37,8 @@ export const createDataSource = (configService: ConfigService) => {
       AiMessageEntity,
       BikeNetworkEntity,
       BikeStationEntity,
+      RoutingSessionEntity,
+      CarbonSavingsEntity,
     ],
     migrations: [],
     synchronize: true,

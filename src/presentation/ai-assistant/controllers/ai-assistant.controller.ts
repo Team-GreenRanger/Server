@@ -23,6 +23,7 @@ import { ChatWithAIUseCase } from '../../../application/ai-assistant/use-cases/c
 import { VerifyImageWithAIUseCase } from '../../../application/ai-assistant/use-cases/verify-image-with-ai.use-case';
 import { GetConversationsUseCase } from '../../../application/ai-assistant/use-cases/get-conversations.use-case';
 import { AnalyzeTrashSortingUseCase } from '../../../application/ai-assistant/use-cases/analyze-trash-sorting.use-case';
+import { GenerateAgeSpecificEcoTipUseCase } from '../../../application/eco-tip/use-cases/generate-age-specific-eco-tip.use-case';
 import { GeminiService } from '../../../infrastructure/external-apis/gemini/gemini.service';
 import { ClaudeService } from '../../../infrastructure/external-apis/claude/claude.service';
 import { 
@@ -46,6 +47,7 @@ export class AIAssistantController {
     private readonly verifyImageWithAIUseCase: VerifyImageWithAIUseCase,
     private readonly getConversationsUseCase: GetConversationsUseCase,
     private readonly analyzeTrashSortingUseCase: AnalyzeTrashSortingUseCase,
+    private readonly generateAgeSpecificEcoTipUseCase: GenerateAgeSpecificEcoTipUseCase,
     private readonly geminiService: GeminiService,
     private readonly claudeService: ClaudeService,
     @Inject(CONVERSATION_REPOSITORY)
@@ -116,19 +118,25 @@ export class AIAssistantController {
   }
 
   @Get('eco-tip')
-  @ApiOperation({ summary: 'Generate daily eco tip' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate age-specific daily eco tip with caching' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Generated eco tip', 
+    description: 'Generated age-specific eco tip', 
     type: GenerateEcoTipResponseDto 
   })
-  async generateEcoTip(): Promise<GenerateEcoTipResponseDto> {
-    const tip = await this.geminiService.generateEcoTip();
+  async generateEcoTip(@Request() req: any): Promise<GenerateEcoTipResponseDto & { userAge: number; isCached: boolean }> {
+    const userId = req.user.sub;
+    
+    const result = await this.generateAgeSpecificEcoTipUseCase.execute({ userId });
     
     return {
-      tip,
-      category: 'daily_tip',
-      timestamp: new Date(),
+      tip: result.tip,
+      category: result.category,
+      userAge: result.userAge,
+      isCached: result.isCached,
+      timestamp: result.timestamp,
     };
   }
 

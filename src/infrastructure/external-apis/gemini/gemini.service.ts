@@ -1,269 +1,694 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-export interface ChatMessage {
-  role: 'user' | 'model';
-  parts: { text: string }[];
-}
-
-export interface GeminiChatRequest {
-  contents: ChatMessage[];
-  generationConfig?: {
-    temperature?: number;
-    maxOutputTokens?: number;
-    topP?: number;
-    topK?: number;
-  };
-}
-
-export interface ChatCompletionRequest {
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-}
-
-export interface ChatCompletionResponse {
-  message: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
+export interface GeminiImageVerificationResponse {
+  isValid: boolean;
+  confidence: number;
+  reasoning: string;
+  detectedElements: string[];
+  suggestions?: string[];
 }
 
 @Injectable()
 export class GeminiService {
   private readonly logger = new Logger(GeminiService.name);
   private readonly apiKey: string | undefined;
-  private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private readonly model = 'gemini-2.5-flash-lite';
-  
-  // Eco tip 캐시를 위한 메모리 저장소
-  private ecoTipCache: { tip: string; date: string } | null = null;
+  private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+  private readonly model = 'gemini-2.5-flash';
 
   constructor(private configService: ConfigService) {
+    console.log('=== GEMINI SERVICE INITIALIZATION ===');
     this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    console.log('Config service available:', !!this.configService);
+    console.log('GEMINI_API_KEY from config:', this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'NOT SET');
+    console.log('API Key length:', this.apiKey?.length || 0);
+    console.log('Base URL:', this.baseUrl);
+    console.log('Model:', this.model);
+    
     if (!this.apiKey) {
+      console.warn('WARNING: Gemini API key not configured - all verifications will fail');
       this.logger.warn('Gemini API key not configured');
+    } else {
+      console.log('Gemini API key configured successfully');
     }
+    console.log('=== GEMINI SERVICE READY ===');
   }
 
-  private convertMessagesToGemini(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>): ChatMessage[] {
-    const geminiMessages: ChatMessage[] = [];
-    let systemPrompt = '';
-
-    // Extract system message and combine with first user message
-    messages.forEach((message, index) => {
-      if (message.role === 'system') {
-        systemPrompt = message.content;
-      } else if (message.role === 'user') {
-        const content = systemPrompt && index === 1 
-          ? `${systemPrompt}\n\n${message.content}` 
-          : message.content;
-        geminiMessages.push({
-          role: 'user',
-          parts: [{ text: content }]
-        });
-        systemPrompt = ''; // Clear after first use
-      } else if (message.role === 'assistant') {
-        geminiMessages.push({
-          role: 'model',
-          parts: [{ text: message.content }]
-        });
-      }
-    });
-
-    return geminiMessages;
-  }
-
-  async createChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
+  async verifyMissionWithDetails(
+    missionTitle: string,
+    missionDescription: string,
+    verificationCriteria: string[],
+    imageUrls: string[],
+    note?: string
+  ): Promise<GeminiImageVerificationResponse> {
+    console.log('=== GEMINI VERIFICATION START ===');
+    console.log('Mission Title:', missionTitle);
+    console.log('Mission Description:', missionDescription);
+    console.log('Verification Criteria:', verificationCriteria);
+    console.log('Image URLs:', imageUrls);
+    console.log('Note:', note);
+    console.log('API Key available:', !!this.apiKey);
+    console.log('API Key first 10 chars:', this.apiKey?.substring(0, 10));
+    
     if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
       throw new Error('Gemini API key not configured');
     }
 
-    const geminiMessages = this.convertMessagesToGemini(request.messages);
-    
-    const payload: GeminiChatRequest = {
-      contents: geminiMessages,
-      generationConfig: {
-        temperature: request.temperature || 0.7,
-        maxOutputTokens: request.maxTokens || 500,
-        topP: 0.8,
-        topK: 10,
-      },
-    };
+    if (!imageUrls || imageUrls.length === 0) {
+      console.error('CRITICAL: No images provided');
+      return {
+        isValid: false,
+        confidence: 0,
+        reasoning: 'No images provided for verification',
+        detectedElements: [],
+        suggestions: ['Please provide at least one image as evidence'],
+      };
+    }
 
     try {
-      const response = await fetch(`${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`, {
+      const primaryImageUrl = imageUrls[0];
+      console.log('Processing primary image URL:', primaryImageUrl);
+      
+      console.log('Fetching image as base64...');
+      const imageBase64 = await this.fetchImageAsBase64(primaryImageUrl);
+      console.log('Image base64 length:', imageBase64.length);
+      console.log('Image base64 first 50 chars:', imageBase64.substring(0, 50));
+      
+      const prompt = `You are an expert verifier for environmental missions in an eco-friendly app.
+
+Mission: "${missionTitle}"
+Description: ${missionDescription}
+
+Verification Criteria (Any ONE of these criteria being met is sufficient for approval):
+${verificationCriteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
+
+⚠️ IMPORTANT: This mission should be APPROVED if the image shows ANY ONE of the above criteria being met. You don't need to see ALL criteria - just ONE is enough for approval.
+
+Analyze the provided image to determine if it successfully demonstrates completion of this mission.
+
+${note ? `User's note: "${note}"\nConsider this context in your assessment.\n` : ''}
+Look for:
+- Clear evidence that matches AT LEAST ONE of the mission requirements (not all of them)
+- Authentic, non-staged environmental actions
+- Proper context and setting for the claimed activity
+- Evidence that ANY ONE of the verification criteria is met
+
+Approval Guidelines:
+✅ APPROVE if you can identify ANY ONE verification criterion being met
+✅ APPROVE if the image shows genuine environmental effort, even if not perfect
+✅ APPROVE if the context and user note support the environmental claim
+❌ REJECT only if clearly fake, staged, or completely unrelated to environmental activity
+
+Be GENEROUS and SUPPORTIVE in your assessment. The goal is to encourage environmental action, not to be overly strict.
+
+Respond with a JSON object in this exact format:
+{
+  "isValid": true/false,
+  "confidence": (number from 0-100),
+  "reasoning": "detailed explanation of your assessment",
+  "detectedElements": ["list", "of", "detected", "elements"],
+  "suggestions": ["optional", "improvement", "suggestions"]
+}
+
+Be encouraging and fair in your assessment. Approve genuine eco-friendly activities that meet ANY ONE of the criteria.`;
+
+      console.log('Gemini prompt length:', prompt.length);
+      console.log('Gemini prompt preview (first 200 chars):', prompt.substring(0, 200));
+
+      const payload = {
+        contents: [{
+          parts: [
+            {
+              text: prompt
+            },
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: imageBase64
+              }
+            }
+          ]
+        }]
+      };
+
+      console.log('Gemini API payload structure:');
+      console.log('- Contents count:', payload.contents.length);
+      console.log('- Parts count:', payload.contents[0].parts.length);
+      console.log('- Text content length:', payload.contents[0].parts[0].text?.length);
+      console.log('- Image data length:', payload.contents[0].parts[1].inline_data?.data.length);
+
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API:', requestUrl);
+      
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
         },
         body: JSON.stringify(payload),
       });
 
+      console.log('Gemini API response status:', response.status);
+      console.log('Gemini API response statusText:', response.statusText);
+      console.log('Gemini API response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        console.error('Full error details:', JSON.stringify(errorData, null, 2));
         throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
       }
 
       const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE:');
+      console.log('- Response keys:', Object.keys(data));
+      console.log('- Candidates available:', !!data.candidates);
+      console.log('- Candidates length:', data.candidates?.length);
+      console.log('- Full response:', JSON.stringify(data, null, 2));
       
       if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
         throw new Error('No candidates returned from Gemini API');
       }
 
       const candidate = data.candidates[0];
       if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-        throw new Error('No content returned from Gemini API');
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
       }
 
-      return {
-        message: candidate.content.parts[0].text,
-        usage: data.usageMetadata ? {
-          promptTokens: data.usageMetadata.promptTokenCount || 0,
-          completionTokens: data.usageMetadata.candidatesTokenCount || 0,
-          totalTokens: data.usageMetadata.totalTokenCount || 0,
-        } : undefined,
-      };
+      const responseText = candidate.content.parts[0].text;
+      console.log('Gemini response text:', responseText);
+      
+      const parsedResult = this.parseVerificationResponse(responseText);
+      console.log('Parsed verification result:', parsedResult);
+      console.log('=== GEMINI VERIFICATION SUCCESS ===');
+      
+      return parsedResult;
     } catch (error) {
-      this.logger.error('Error calling Gemini API:', error);
-      throw error;
+      console.error('=== GEMINI VERIFICATION ERROR ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Full error object:', error);
+      this.logger.error('Error verifying mission with Gemini:', error);
+      
+      throw new Error('Gemini verification failed: ' + error.message);
+    }
+  }
+
+  private async fetchImageAsBase64(imageUrl: string): Promise<string> {
+    console.log('=== FETCHING IMAGE AS BASE64 (GEMINI) ===');
+    console.log('Image URL:', imageUrl);
+    console.log('URL type:', typeof imageUrl);
+    console.log('URL length:', imageUrl?.length);
+    
+    try {
+      console.log('Making fetch request to:', imageUrl);
+      const response = await fetch(imageUrl);
+      
+      console.log('Fetch response status:', response.status);
+      console.log('Fetch response statusText:', response.statusText);
+      console.log('Fetch response ok:', response.ok);
+      console.log('Fetch response url:', response.url);
+      
+      if (!response.ok) {
+        console.error('Fetch failed with status:', response.status, response.statusText);
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+
+      console.log('Converting response to arrayBuffer...');
+      const arrayBuffer = await response.arrayBuffer();
+      console.log('ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
+      
+      console.log('Converting arrayBuffer to Buffer...');
+      const buffer = Buffer.from(arrayBuffer);
+      console.log('Buffer size:', buffer.length, 'bytes');
+      
+      console.log('Converting buffer to base64...');
+      const base64String = buffer.toString('base64');
+      console.log('Base64 string length:', base64String.length);
+      console.log('Base64 first 100 chars:', base64String.substring(0, 100));
+      console.log('=== IMAGE FETCH SUCCESS (GEMINI) ===');
+      
+      return base64String;
+    } catch (error) {
+      console.error('=== IMAGE FETCH ERROR (GEMINI) ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      console.error('Full error object:', error);
+      this.logger.error('Error fetching image for Gemini:', error);
+      throw new Error('Failed to fetch image for Gemini verification');
+    }
+  }
+
+  private parseVerificationResponse(responseText: string): GeminiImageVerificationResponse {
+    console.log('=== PARSING GEMINI VERIFICATION RESPONSE ===');
+    console.log('Response text length:', responseText?.length);
+    console.log('Response text:', responseText);
+    
+    try {
+      console.log('Looking for JSON in response text...');
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      console.log('JSON match found:', !!jsonMatch);
+      
+      if (!jsonMatch) {
+        console.error('No JSON found in response text');
+        throw new Error('No JSON found in response');
+      }
+
+      const jsonString = jsonMatch[0];
+      console.log('Extracted JSON string:', jsonString);
+      console.log('JSON string length:', jsonString.length);
+      
+      console.log('Parsing JSON...');
+      const parsed = JSON.parse(jsonString);
+      console.log('Parsed JSON object:', parsed);
+      console.log('Parsed object keys:', Object.keys(parsed));
+      console.log('isValid:', parsed.isValid, typeof parsed.isValid);
+      console.log('confidence:', parsed.confidence, typeof parsed.confidence);
+      console.log('reasoning:', parsed.reasoning?.substring(0, 100));
+      console.log('detectedElements:', parsed.detectedElements);
+      console.log('suggestions:', parsed.suggestions);
+      
+      const result = {
+        isValid: Boolean(parsed.isValid),
+        confidence: Math.min(Math.max(Number(parsed.confidence) || 0, 0), 100),
+        reasoning: String(parsed.reasoning || 'No reasoning provided'),
+        detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements : [],
+        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : undefined,
+      };
+      
+      console.log('Final processed result (Gemini):', result);
+      console.log('=== GEMINI PARSING SUCCESS ===');
+      return result;
+    } catch (error) {
+      console.error('=== GEMINI PARSING ERROR ===');
+      console.error('Parse error type:', error.constructor.name);
+      console.error('Parse error message:', error.message);
+      console.error('Parse error stack:', error.stack);
+      this.logger.error('Error parsing Gemini response:', error);
+      
+      const fallbackResult = {
+        isValid: false,
+        confidence: 0,
+        reasoning: 'Failed to parse Gemini verification response. Please try submitting again.',
+        detectedElements: [],
+        suggestions: ['Please ensure the image clearly shows the mission activity'],
+      };
+      
+      console.log('Returning fallback result (Gemini):', fallbackResult);
+      return fallbackResult;
     }
   }
 
   async generateEcoTip(): Promise<string> {
-    // 한국 시간 기준으로 오늘 날짜 계산
-    const koreaTime = new Date(new Date().getTime() + (9 * 60 * 60 * 1000));
-    const today = koreaTime.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    console.log('=== GEMINI ECO TIP GENERATION START ===');
     
-    // 캐시된 글이 오늘 날짜와 맞는지 확인
-    if (this.ecoTipCache && this.ecoTipCache.date === today) {
-      this.logger.log(`Returning cached eco tip for today (${today})`);
-      return this.ecoTipCache.tip;
-    }
-    
-    this.logger.log(`Generating new eco tip for today (${today})`);
-    
-    const systemPrompt = `You are an environmental expert. Generate a very short, practical eco-friendly tip in exactly 2 lines.
-    
-    Requirements:
-    - EXACTLY 2 lines separated by a line break
-    - Each line maximum 50 characters (including spaces)
-    - Simple, actionable advice
-    - Focus on daily habits
-    - Be specific and clear
-    - No extra explanations or context
-    - Format: First line should be the action, second line should be the benefit
-    
-    Examples:
-    "Turn off lights when leaving rooms\nSaves 10% on your electricity bill"
-    "Use a reusable water bottle daily\nPrevents 1,460 plastic bottles per year"
-    "Walk for trips under 1 mile\nReduces CO2 by 0.4kg per trip"`;
-
-    const response = await this.createChatCompletion({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: 'Generate a 2-line daily eco tip with specific benefits.' }
-      ],
-      temperature: 0.8,
-      maxTokens: 80,
-    });
-
-    // 2줄 형식 보장
-    let tip = response.message.trim();
-    if (!tip.includes('\n')) {
-      // 만약 1줄로 왔다면 적절히 나누기
-      const words = tip.split(' ');
-      const midPoint = Math.ceil(words.length / 2);
-      tip = words.slice(0, midPoint).join(' ') + '\n' + words.slice(midPoint).join(' ');
+    if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
+      throw new Error('Gemini API key not configured');
     }
 
-    // 캐시에 저장
-    this.ecoTipCache = {
-      tip,
-      date: today
-    };
+    try {
+      const ecoTipPrompt = `Generate a practical, actionable environmental tip for today. Make it:
+
+- Specific and easy to implement
+- Suitable for everyday life
+- Scientifically accurate
+- About 50-100 words
+- Include a specific action people can take
+- Focus on real environmental impact
+
+Provide just the tip without additional formatting or explanations.`;
+      
+      const payload = {
+        contents: [{
+          parts: [{
+            text: ecoTipPrompt
+          }]
+        }]
+      };
+
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API for eco tip generation...');
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Gemini API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE for eco tip');
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
+        throw new Error('No candidates returned from Gemini API');
+      }
+
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
+      }
+
+      const ecoTip = candidate.content.parts[0].text;
+      console.log('Generated eco tip length:', ecoTip.length);
+      console.log('=== GEMINI ECO TIP GENERATION SUCCESS ===');
+      
+      return ecoTip.trim();
+    } catch (error) {
+      console.error('=== GEMINI ECO TIP GENERATION ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error generating eco tip (Gemini):', error);
+      throw error;
+    }
+  }
+
+  async generateEcoEducationContent(topic: string): Promise<string> {
+    console.log('=== GEMINI ECO EDUCATION CONTENT GENERATION START ===');
+    console.log('Topic:', topic);
     
-    this.logger.log(`New eco tip cached: ${tip.replace('\n', ' | ')}`);
-    return this.ecoTipCache.tip;
+    if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
+      throw new Error('Gemini API key not configured');
+    }
+
+    try {
+      const educationPrompt = `You are an environmental education expert. Create engaging, accurate educational content about: "${topic}"
+
+Make it:
+- Scientifically accurate
+- Easy to understand for general audiences
+- Actionable with practical tips
+- About 200-300 words
+- Include specific examples and statistics where relevant
+
+Provide the educational content without additional formatting.`;
+      
+      const payload = {
+        contents: [{
+          parts: [{
+            text: educationPrompt
+          }]
+        }]
+      };
+
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API for education content...');
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Gemini API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE for education content');
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
+        throw new Error('No candidates returned from Gemini API');
+      }
+
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
+      }
+
+      const educationContent = candidate.content.parts[0].text;
+      console.log('Generated education content length:', educationContent.length);
+      console.log('=== GEMINI ECO EDUCATION CONTENT GENERATION SUCCESS ===');
+      
+      return educationContent.trim();
+    } catch (error) {
+      console.error('=== GEMINI ECO EDUCATION CONTENT GENERATION ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error generating eco education content (Gemini):', error);
+      throw error;
+    }
   }
 
-  async generateMotivationalMessage(userStats: {
-    completedMissions: number;
-    carbonCredits: number;
-    ranking: number;
-  }): Promise<string> {
-    const systemPrompt = `You are a motivational coach for environmental action. 
-    Create encouraging messages based on user progress. Be positive, specific, and inspiring.
-    Acknowledge their achievements and encourage continued action.`;
+  async createChatCompletion(options: {
+    messages: Array<{role: 'system' | 'user' | 'assistant', content: string}>;
+    temperature?: number;
+    maxTokens?: number;
+  }): Promise<{message: string}> {
+    console.log('=== GEMINI CHAT COMPLETION START ===');
+    console.log('Messages count:', options.messages.length);
+    console.log('Temperature:', options.temperature);
+    console.log('Max tokens:', options.maxTokens);
+    
+    if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
+      throw new Error('Gemini API key not configured');
+    }
 
-    const userMessage = `Generate a motivational message for a user with ${userStats.completedMissions} completed missions, 
-    ${userStats.carbonCredits} carbon credits, and ranking #${userStats.ranking}.`;
+    try {
+      // Gemini는 시스템 메시지를 별도로 처리하지 않으므로 대화 형식으로 변환
+      const systemMessage = options.messages.find(m => m.role === 'system');
+      const conversationMessages = options.messages.filter(m => m.role !== 'system');
+      
+      let prompt = '';
+      if (systemMessage) {
+        prompt += `${systemMessage.content}\n\nConversation:\n`;
+      }
+      
+      for (const msg of conversationMessages) {
+        if (msg.role === 'user') {
+          prompt += `Human: ${msg.content}\n`;
+        } else if (msg.role === 'assistant') {
+          prompt += `Assistant: ${msg.content}\n`;
+        }
+      }
+      
+      prompt += 'Assistant:';
+      
+      console.log('Generated prompt length:', prompt.length);
+      console.log('Generated prompt preview:', prompt.substring(0, 300));
+      
+      const payload = {
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      };
 
-    const response = await this.createChatCompletion({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage }
-      ],
-      temperature: 0.7,
-      maxTokens: 150,
-    });
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API for chat completion...');
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    return response.message;
+      console.log('Gemini API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE for chat');
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
+        throw new Error('No candidates returned from Gemini API');
+      }
+
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
+      }
+
+      const aiMessage = candidate.content.parts[0].text;
+      console.log('Generated AI message length:', aiMessage.length);
+      console.log('=== GEMINI CHAT COMPLETION SUCCESS ===');
+      
+      return { message: aiMessage.trim() };
+    } catch (error) {
+      console.error('=== GEMINI CHAT COMPLETION ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error creating chat completion (Gemini):', error);
+      throw error;
+    }
   }
 
-  async answerEcoQuestion(question: string, context?: string): Promise<string> {
-    const systemPrompt = `You are an expert environmental scientist and climate action specialist.
-    Answer questions about climate change, sustainability, environmental protection, and eco-friendly practices.
-    Provide accurate, scientific information while being accessible to general audiences.
-    Focus on actionable advice and practical solutions.
-    ${context ? `Context: ${context}` : ''}`;
+  async generateTextContent(prompt: string): Promise<string> {
+    console.log('=== GEMINI TEXT CONTENT GENERATION START ===');
+    console.log('Prompt length:', prompt.length);
+    
+    if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
+      throw new Error('Gemini API key not configured');
+    }
 
-    const response = await this.createChatCompletion({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: question }
-      ],
-      temperature: 0.3,
-      maxTokens: 600,
-    });
+    try {
+      const payload = {
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      };
 
-    return response.message;
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API for text content generation...');
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Gemini API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE for text content');
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
+        throw new Error('No candidates returned from Gemini API');
+      }
+
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
+      }
+
+      const textContent = candidate.content.parts[0].text;
+      console.log('Generated text content length:', textContent.length);
+      console.log('=== GEMINI TEXT CONTENT GENERATION SUCCESS ===');
+      
+      return textContent.trim();
+    } catch (error) {
+      console.error('=== GEMINI TEXT CONTENT GENERATION ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error generating text content (Gemini):', error);
+      throw error;
+    }
   }
 
-  async analyzeTrashImage(imageUrl: string, userCountry: string, guidelines: string): Promise<string> {
-    const systemPrompt = `당신은 쓰레기 분리수거 전문가입니다. 사용자가 제공한 이미지 URL을 보고 올바른 분리수거 방법을 알려주세요.
+  async analyzeImageWithText(imageUrl: string, analysisPrompt: string): Promise<string> {
+    console.log('=== GEMINI IMAGE TEXT ANALYSIS START ===');
+    console.log('Image URL:', imageUrl);
+    console.log('Analysis prompt length:', analysisPrompt.length);
+    
+    if (!this.apiKey) {
+      console.error('CRITICAL: Gemini API key not configured');
+      throw new Error('Gemini API key not configured');
+    }
 
-사용자 국가: ${userCountry}
-해당 국가의 분리수거 규정:
-${guidelines}
+    try {
+      console.log('Fetching image as base64...');
+      const imageBase64 = await this.fetchImageAsBase64(imageUrl);
+      console.log('Image fetched successfully, base64 length:', imageBase64.length);
+      
+      const payload = {
+        contents: [{
+          parts: [
+            {
+              text: analysisPrompt
+            },
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: imageBase64
+              }
+            }
+          ]
+        }]
+      };
 
-다음 JSON 형식으로 응답해주세요:
-{
-  "trashType": "감지된 쓰레기 종류 (한국어)",
-  "disposalMethod": "구체적인 버리는 방법 (한국어, 50자 이내)",
-  "countrySpecificGuidelines": "해당 국가의 세부 지침 (한국어, 100자 이내)",
-  "confidence": 신뢰도_점수_숫자(0-100),
-  "additionalTips": ["추가 팁1", "추가 팁2"]
-}
+      const requestUrl = `${this.baseUrl}/${this.model}:generateContent`;
+      console.log('Making request to Gemini API for image text analysis...');
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
 
-중요한 규칙:
-1. 반드시 JSON 형식으로만 응답
-2. 한국어로 응답
-3. 구체적이고 실용적인 조언 제공
-4. 신뢰도는 정확한 인식 정도에 따라 설정`;
+      console.log('Gemini API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Gemini API ERROR RESPONSE:', errorData);
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
 
-    const response = await this.createChatCompletion({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `이 이미지의 쓰레기를 분석해서 어떻게 버려야 하는지 알려주세요. 이미지 URL: ${imageUrl}\n\n주의: 이미지 URL을 직접 분석할 수 없으므로, URL의 파일명이나 경로에서 힌트를 얻거나, 일반적인 쓰레기 분류 가이드를 제공해주세요.` }
-      ],
-      temperature: 0.3,
-      maxTokens: 500,
-    });
+      const data = await response.json();
+      console.log('Gemini API SUCCESS RESPONSE');
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        console.error('CRITICAL: No candidates returned from Gemini API');
+        throw new Error('No candidates returned from Gemini API');
+      }
 
-    return response.message;
+      const candidate = data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('CRITICAL: No content parts in candidate');
+        throw new Error('No content parts in candidate');
+      }
+
+      const responseText = candidate.content.parts[0].text;
+      console.log('Gemini response text length:', responseText.length);
+      console.log('=== GEMINI IMAGE TEXT ANALYSIS SUCCESS ===');
+      
+      return responseText;
+    } catch (error) {
+      console.error('=== GEMINI IMAGE TEXT ANALYSIS ERROR ===');
+      console.error('Error:', error);
+      this.logger.error('Error analyzing image with text (Gemini):', error);
+      throw error;
+    }
   }
 }

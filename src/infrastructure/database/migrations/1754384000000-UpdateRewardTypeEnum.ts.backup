@@ -1,0 +1,33 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class UpdateRewardTypeEnum1754384000000 implements MigrationInterface {
+  name = 'UpdateRewardTypeEnum1754384000000';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // RewardType enum에 ECO_PRODUCT, DONATION 추가
+    await queryRunner.query(`
+      ALTER TABLE \`tbl_rewards\` 
+      MODIFY COLUMN \`type\` enum(
+        'DISCOUNT_COUPON',
+        'GIFT_CARD', 
+        'ECO_PRODUCT',
+        'PHYSICAL_ITEM',
+        'EXPERIENCE',
+        'DONATION'
+      ) NOT NULL
+    `);
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // 기존 enum으로 되돌리기 (새로운 값들 제거)
+    await queryRunner.query(`
+      ALTER TABLE \`tbl_rewards\` 
+      MODIFY COLUMN \`type\` enum(
+        'DISCOUNT_COUPON',
+        'GIFT_CARD',
+        'PHYSICAL_ITEM', 
+        'EXPERIENCE'
+      ) NOT NULL
+    `);
+  }
+}

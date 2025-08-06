@@ -259,7 +259,7 @@ export class RewardController {
     const result = await this.createRewardUseCase.execute({
       title: createRewardDto.name,
       description: createRewardDto.description,
-      type: createRewardDto.type as any,
+      type: this.mapRewardTypeFromDto(createRewardDto.type),
       creditCost: createRewardDto.cost,
       barcodeImageUrl: createRewardDto.barcodeImageUrl,
       originalPrice: createRewardDto.originalPrice,
@@ -351,6 +351,17 @@ export class RewardController {
       [RewardType.EXPERIENCE]: RewardTypeDto.EXPERIENCE,
     };
     return mapping[domainType] || RewardTypeDto.ECO_PRODUCT;
+  }
+
+  private mapRewardTypeFromDto(dtoType: RewardTypeDto): RewardType {
+    const mapping = {
+      [RewardTypeDto.DISCOUNT_COUPON]: RewardType.DISCOUNT_COUPON,
+      [RewardTypeDto.GIFT_CARD]: RewardType.GIFT_CARD,
+      [RewardTypeDto.ECO_PRODUCT]: RewardType.PHYSICAL_ITEM,
+      [RewardTypeDto.EXPERIENCE]: RewardType.EXPERIENCE,
+      [RewardTypeDto.DONATION]: RewardType.PHYSICAL_ITEM, // DONATION -> PHYSICAL_ITEM으로 매핑
+    };
+    return mapping[dtoType] || RewardType.PHYSICAL_ITEM;
   }
 
   private mapRewardStatusToDto(domainStatus: RewardStatus): RewardStatusDto {

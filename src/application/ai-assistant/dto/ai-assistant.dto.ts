@@ -1,4 +1,4 @@
-import { IsString, IsUrl, IsUUID, IsOptional, IsArray, ValidateNested, IsISO8601 } from 'class-validator';
+import { IsString, IsUrl, IsUUID, IsOptional, IsArray, ValidateNested, IsISO8601, IsBoolean, IsNumber } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -83,6 +83,12 @@ export class GenerateEcoTipResponseDto {
 
   @ApiProperty({ description: 'Tip category' })
   category: string;
+
+  @ApiPropertyOptional({ description: 'User age (for age-specific tips)' })
+  userAge?: number;
+
+  @ApiPropertyOptional({ description: 'Whether this tip was retrieved from cache' })
+  isCached?: boolean;
 
   @ApiProperty({ description: 'Generation timestamp' })
   timestamp: Date;
