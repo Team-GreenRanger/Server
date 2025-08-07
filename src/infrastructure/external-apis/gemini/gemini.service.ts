@@ -83,24 +83,30 @@ Description: ${missionDescription}
 Verification Criteria (Any ONE of these criteria being met is sufficient for approval):
 ${verificationCriteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
 
-⚠️ IMPORTANT: This mission should be APPROVED if the image shows ANY ONE of the above criteria being met. You don't need to see ALL criteria - just ONE is enough for approval.
-
 Analyze the provided image to determine if it successfully demonstrates completion of this mission.
 
 ${note ? `User's note: "${note}"\nConsider this context in your assessment.\n` : ''}
 Look for:
-- Clear evidence that matches AT LEAST ONE of the mission requirements (not all of them)
-- Authentic, non-staged environmental actions
+- Clear evidence that matches AT LEAST ONE of the mission requirements
+- Authentic environmental actions that align with the mission purpose
 - Proper context and setting for the claimed activity
-- Evidence that ANY ONE of the verification criteria is met
+- Logical consistency between the mission goal and what's shown in the image
 
 Approval Guidelines:
-✅ APPROVE if you can identify ANY ONE verification criterion being met
-✅ APPROVE if the image shows genuine environmental effort, even if not perfect
-✅ APPROVE if the context and user note support the environmental claim
-❌ REJECT only if clearly fake, staged, or completely unrelated to environmental activity
+✅ APPROVE if you can clearly identify ANY ONE verification criterion being met
+✅ APPROVE if the image shows genuine environmental effort that matches the mission intent
+✅ APPROVE if the context and user note support a valid environmental claim
+❌ REJECT if the image shows the OPPOSITE of what the mission requires
+❌ REJECT if clearly fake, staged, or completely unrelated to the mission
+❌ REJECT if there's a logical contradiction between mission goal and image content
 
-Be GENEROUS and SUPPORTIVE in your assessment. The goal is to encourage environmental action, not to be overly strict.
+⚠️ CRITICAL: Pay special attention to logical inconsistencies. For example:
+- If the mission is about "unplugging devices to save energy" but the image shows plugged-in devices, REJECT it
+- If the mission is about "using reusable bags" but the image shows single-use plastic bags, REJECT it
+- If the mission is about "turning off lights" but the image shows lights turned on, REJECT it
+(EX: 이렇게 미션의 목적과 정반대되는 로직이 잘못된 경우에는 반드시 거절하세요)
+
+Be fair but accurate in your assessment. Encourage genuine environmental action while maintaining verification integrity.
 
 Respond with a JSON object in this exact format:
 {
@@ -111,7 +117,7 @@ Respond with a JSON object in this exact format:
   "suggestions": ["optional", "improvement", "suggestions"]
 }
 
-Be encouraging and fair in your assessment. Approve genuine eco-friendly activities that meet ANY ONE of the criteria.`;
+Ensure logical consistency between the mission requirements and the image evidence.`;
 
       console.log('Gemini prompt length:', prompt.length);
       console.log('Gemini prompt preview (first 200 chars):', prompt.substring(0, 200));
